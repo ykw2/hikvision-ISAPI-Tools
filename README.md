@@ -15,6 +15,8 @@
 python -m pip install -e ".[dev]"
 ```
 
+Windows 也可以用視窗操作，見下方「Windows 視窗」。
+
 檢查清單與設定檔（不會連線）：
 
 ```bash
@@ -22,6 +24,27 @@ hik-isapi validate \
   --inventory examples/inventory.csv \
   --profile examples/profiles/standard.yaml
 ```
+
+## Windows 視窗
+
+`windows/HikIsapi.sln` 是 WinForms 程式，在 Windows 上操作同一套指令。它不會另外實作 ISAPI，而是啟動已安裝的 `hik-isapi`，所以演練、合併 XML、重試與失敗率保護的行為跟命令列相同。
+
+需要：
+
+- Windows
+- Python 3.11 以上，並在專案目錄執行 `py -3 -m pip install -e .`
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)（只執行已發布的程式時，改裝 .NET 8 Desktop Runtime）
+
+```powershell
+dotnet build windows\HikIsapi.sln -c Release
+dotnet run --project windows\HikIsapi.Win\HikIsapi.Win.csproj -c Release
+```
+
+視窗可以選清單、設定檔、標籤、數量上限、並發與失敗率。按鈕對應 `validate`、`probe`、`apply --dry-run` 與正式 `apply`。正式套用與重跑失敗會先詢問，預設按鈕是取消。數量上限空白代表全部符合條件的攝影機。
+
+密碼打在視窗裡時，只放進這次子行程的環境變數，不會出現在命令列，也不會寫進 `%AppData%\hik-isapi\settings.json`。清單某一列自己有密碼時，仍以那一列為準。
+
+報告寫到工作目錄下的 `results`。工作目錄空白時，使用清單所在的資料夾。
 
 ## 建議流程
 

@@ -8,6 +8,8 @@ __pycache__/
 venv/
 dist/
 build/
+**/bin/
+**/obj/
 /results/
 /inventory.csv
 /cameras.csv
