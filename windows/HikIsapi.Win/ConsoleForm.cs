@@ -33,6 +33,18 @@ public sealed class ConsoleForm : Form
         Orientation = Orientation.Vertical,
         SplitterWidth = 6,
     };
+    private readonly SplitContainer _bands = new()
+    {
+        Dock = DockStyle.Fill,
+        Orientation = Orientation.Horizontal,
+        SplitterWidth = 6,
+    };
+    private readonly SplitContainer _lower = new()
+    {
+        Dock = DockStyle.Fill,
+        Orientation = Orientation.Horizontal,
+        SplitterWidth = 6,
+    };
     private CancellationTokenSource? _runCts;
     private bool _busy;
     private bool _fetching;
@@ -61,8 +73,7 @@ public sealed class ConsoleForm : Form
 
         var logHost = new Panel
         {
-            Dock = DockStyle.Bottom,
-            Height = line * 5 + 24,
+            Dock = DockStyle.Fill,
             Padding = new Padding(12, 4, 12, 8),
         };
         _log.Dock = DockStyle.Fill;
@@ -76,12 +87,11 @@ public sealed class ConsoleForm : Form
 
         _panes.Panel1.Controls.Add(BuildControls());
         _panes.Panel2.Controls.Add(BuildLive());
-        var actions = BuildActions();
-        var manual = BuildManualHost();
-        Controls.Add(_panes);
-        Controls.Add(actions);
-        Controls.Add(manual);
-        Controls.Add(logHost);
+        _lower.Panel1.Controls.Add(BuildManualHost());
+        _lower.Panel2.Controls.Add(logHost);
+        _bands.Panel1.Controls.Add(_panes);
+        _bands.Panel2.Controls.Add(_lower);
+        Controls.Add(_bands);
         Controls.Add(menu);
 
         var area = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1280, 800);
@@ -130,7 +140,7 @@ public sealed class ConsoleForm : Form
                 LabelItem("警告 (Alarm)"), FlexItem.Grow(_alarm, line * 4)));
 
         var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
-        var content = Stack(ipGroup, authGroup, tempGroup);
+        var content = Stack(ipGroup, authGroup, tempGroup, BuildActions());
         content.Padding = new Padding(4, 4, 8, 4);
         scroll.Controls.Add(content);
         Remember(_ip, _user, _password, _showPassword, _alert, _alarm);
@@ -145,11 +155,11 @@ public sealed class ConsoleForm : Form
         var reboot = TaskButton("遠端重啟設備", new Padding(0, 4, 8, 4), Color.FromArgb(209, 52, 56), Color.FromArgb(177, 45, 48), Color.FromArgb(142, 36, 38), ConsoleTask.Reboot);
         var bar = new FlowLayoutPanel
         {
-            Dock = DockStyle.Bottom,
+            Dock = DockStyle.Top,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = true,
             AutoScroll = false,
-            Padding = new Padding(12, 8, 12, 4),
+            Padding = new Padding(0, 8, 0, 4),
             Margin = new Padding(0),
             Height = TextHeight() * 3,
         };
@@ -172,7 +182,9 @@ public sealed class ConsoleForm : Form
         _body.AcceptsReturn = true;
         _body.Font = new Font(FontFamily.GenericMonospace, 9f);
         _body.PlaceholderText = "XML，GET 可留空";
-        _body.Height = line * 3;
+        _body.Dock = DockStyle.Fill;
+        _body.Margin = new Padding(0, 4, 0, 0);
+        _body.MinimumSize = new Size(0, line * 2);
         StyleButton(_send, Color.FromArgb(0, 120, 212), Color.FromArgb(16, 110, 190), Color.FromArgb(0, 90, 158), Color.White, 6, 8.5f);
         _send.Click += async (_, _) => await Guard(() => RunJobAsync(ConsoleTask.Manual));
         SizeToText(_send);
@@ -189,38 +201,30 @@ public sealed class ConsoleForm : Form
             MaximumSize = new Size(800, 0),
             Padding = new Padding(0, 2, 0, 2),
         };
-        var manualGroup = Group("手動 ISAPI",
-            FlexRow(
-                LabelItem("方法"), FlexItem.Grow(_method, line * 5),
-                LabelItem("路徑"), FlexItem.Grow(_path, line * 16),
-                FlexItem.Fixed(_send),
-                FlexItem.Fixed(_stop)),
-            hint,
-            FixedBlock(_body));
-        manualGroup.Margin = new Padding(0);
+        var manualGroup = new GroupBox
+        {
+            Text = "手動 ISAPI",
+            Dock = DockStyle.Fill,
+            Padding = new Padding(8, 4, 8, 6),
+        };
+        var row = FlexRow(
+            LabelItem("方法"), FlexItem.Grow(_method, line * 5),
+            LabelItem("路徑"), FlexItem.Grow(_path, line * 16),
+            FlexItem.Fixed(_send),
+            FlexItem.Fixed(_stop));
+        var inner = new Panel { Dock = DockStyle.Fill };
+        inner.Controls.Add(_body);
+        inner.Controls.Add(hint);
+        inner.Controls.Add(row);
+        manualGroup.Controls.Add(inner);
         manualGroup.Resize += (_, _) =>
         {
             var width = Math.Max(80, manualGroup.ClientSize.Width - 24);
             if (hint.MaximumSize.Width != width)
                 hint.MaximumSize = new Size(width, 0);
         };
-        var host = new Panel
-        {
-            Dock = DockStyle.Bottom,
-            Padding = new Padding(8, 0, 8, 0),
-            Height = line * 10,
-        };
-        host.Controls.Add(manualGroup);
-        void FitHost(object? sender, EventArgs e)
-        {
-            var height = manualGroup.Height + host.Padding.Vertical;
-            if (height > line * 4 && host.Height != height)
-                host.Height = height;
-        }
-        manualGroup.SizeChanged += FitHost;
-        host.HandleCreated += FitHost;
         Remember(_method, _path, _body, _send);
-        return host;
+        return manualGroup;
     }
 
     private static void GrowToChildren(FlowLayoutPanel panel)
@@ -255,6 +259,7 @@ public sealed class ConsoleForm : Form
                 foreach (Control child in panel.Controls)
                     bottom = Math.Max(bottom, child.Bottom + child.Margin.Bottom + panel.Padding.Bottom);
                 var height = Math.Max(laid.Height + panel.Padding.Vertical, bottom);
+                panel.MinimumSize = new Size(0, height);
                 if (panel.Height != height)
                     panel.Height = height;
             }
@@ -310,14 +315,23 @@ public sealed class ConsoleForm : Form
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
+        PlaceSplitter(_panes, 0.40, 320, 280);
+        PlaceSplitter(_bands, 0.56, 220, 180);
+        PlaceSplitter(_lower, 0.58, 110, 80);
+    }
+
+    private static void PlaceSplitter(SplitContainer split, double portion, int panel1Min, int panel2Min)
+    {
         try
         {
-            var limit = _panes.Width - _panes.SplitterWidth - 280;
-            if (limit < 320)
+            var available = (split.Orientation == Orientation.Vertical ? split.Width : split.Height) - split.SplitterWidth;
+            if (available < panel1Min + panel2Min)
                 return;
-            _panes.Panel1MinSize = 320;
-            _panes.Panel2MinSize = 280;
-            _panes.SplitterDistance = Math.Max(320, Math.Min((int)(_panes.Width * 0.40), limit));
+            split.Panel1MinSize = panel1Min;
+            split.Panel2MinSize = panel2Min;
+            var distance = (int)((available + split.SplitterWidth) * portion);
+            var max = available - panel2Min;
+            split.SplitterDistance = Math.Max(panel1Min, Math.Min(distance, max));
         }
         catch (InvalidOperationException)
         {

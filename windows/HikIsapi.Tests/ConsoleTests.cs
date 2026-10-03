@@ -171,6 +171,26 @@ public sealed class ConsoleReportTests
         var changed = ConsoleReport.Format(ConsoleTask.SetTemp, temp);
         Assert.Contains("200→220℃", changed);
         Assert.Contains("修改成功", changed);
+
+        var manual = Path.Combine(directory, "manual.json");
+        File.WriteAllText(manual, """
+        {
+          "cameras": [
+            {
+              "host": "10.0.0.8",
+              "ok": true,
+              "skipped": false,
+              "steps": [
+                { "http_status": 200, "body": "{\"model\":\"DS-2\",\"serialNumber\":\"ABC\"}" }
+              ]
+            }
+          ]
+        }
+        """);
+        var shown = ConsoleReport.Format(ConsoleTask.Manual, manual);
+        Assert.Contains("\"model\": \"DS-2\"", shown);
+        Assert.Contains("\"serialNumber\": \"ABC\"", shown);
+        Assert.Contains("\n  \"model\"", shown.Replace("\r\n", "\n"));
         Directory.Delete(directory, recursive: true);
     }
 }

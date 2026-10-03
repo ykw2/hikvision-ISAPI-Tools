@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Xml.Linq;
 
@@ -5,6 +6,30 @@ namespace HikIsapi;
 
 public static class ConsoleReport
 {
+    private static readonly JsonSerializerOptions PrettyOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    public static string Pretty(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return text ?? "";
+        var trimmed = text.Trim();
+        if (trimmed.Length < 2 || (trimmed[0] != '{' && trimmed[0] != '['))
+            return text;
+        try
+        {
+            using var document = JsonDocument.Parse(trimmed);
+            return JsonSerializer.Serialize(document.RootElement, PrettyOptions);
+        }
+        catch (JsonException)
+        {
+            return text;
+        }
+    }
+
     public static string Format(ConsoleTask task, string jsonPath)
     {
         if (!File.Exists(jsonPath))
@@ -106,7 +131,7 @@ public static class ConsoleReport
         var line = string.Format("{0,-16} | {1,-6} | {2}", host, status, ok ? "完成" : error);
         if (!includeBody)
             return line;
-        var body = Body(step);
+        var body = Pretty(Body(step));
         return string.IsNullOrWhiteSpace(body) ? line : line + Environment.NewLine + body;
     }
 
