@@ -23,7 +23,6 @@ public sealed class ConsoleForm : Form
     private readonly PictureBox _picture = new();
     private readonly System.Windows.Forms.Timer _liveTimer = new() { Interval = 1000 };
     private readonly DigestHttp _snapshots = new(TimeSpan.FromSeconds(5));
-    private readonly ProcessRunner _runner = new();
     private readonly List<Control> _lockables = new();
     private readonly string _settingsPath = UiSettingsStore.DefaultPath();
     private readonly string _jobDirectory = Path.Combine(Path.GetTempPath(), "hik-isapi-console");
@@ -358,31 +357,22 @@ public sealed class ConsoleForm : Form
     {
         ShowPreset(task);
         var input = ReadInput();
-        if (!ConsoleLaunch.TryCreate(
-                task,
-                input,
-                "",
-                OperatingSystem.IsWindows(),
-                name => PythonCommand.FindOnPath(name),
-                _jobDirectory,
-                out var plan,
-                out var error)
-            || plan == null)
+        if (!ConsoleLaunch.TryPrepare(task, input, out var addresses, out var error))
         {
-            MessageBox.Show(this, error ?? "無法建立命令", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, error ?? "無法開始作業", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
         if (task == ConsoleTask.Reboot
-            && MessageBox.Show(this, $"確定要對 {plan.Addresses.Count} 支攝影機送出重啟嗎？", "重啟確認", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            && MessageBox.Show(this, $"確定要對 {addresses.Count} 支攝影機送出重啟嗎？", "重啟確認", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
             return;
         var method = input.Method.Trim().ToUpperInvariant();
         if (task == ConsoleTask.Manual && method is "PUT" or "POST" or "DELETE"
-            && MessageBox.Show(this, $"這會對 {plan.Addresses.Count} 支攝影機原樣送出 {method}。確定？", "送出確認", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            && MessageBox.Show(this, $"這會對 {addresses.Count} 支攝影機原樣送出 {method}。確定？", "送出確認", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
             return;
 
         SaveSettings();
         _log.Clear();
-        AppendLog($"[任務] {TaskTitle(task)} | 目標: {input.IpInput.Trim()} ({plan.Addresses.Count} 台) | 時間: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        AppendLog($"[任務] {TaskTitle(task)} | 目標: {input.IpInput.Trim()} ({addresses.Count} 台) | 時間: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         if (task == ConsoleTask.SetTemp)
             AppendLog("套用新溫度會先讀取裝置上的 XML，只改預警與警告再寫回。");
         AppendLog("");
@@ -390,15 +380,9 @@ public sealed class ConsoleForm : Form
         SetBusy(true);
         try
         {
-            var code = await _runner.RunAsync(new ProcessRequest
-            {
-                FileName = plan.Launch.FileName,
-                Arguments = plan.Launch.Arguments,
-                WorkingDirectory = plan.Launch.WorkingDirectory,
-                Environment = plan.Launch.Environment,
-            }, AppendLog, _runCts.Token);
+            var code = await ConsoleJobs.RunAsync(task, input, _jobDirectory, _runCts.Token);
             AppendLog("");
-            AppendLog(ConsoleReport.Format(task, plan.ReportPath));
+            AppendLog(ConsoleReport.Format(task, Path.Combine(_jobDirectory, "report.json")));
             AppendLog("");
             AppendLog(code switch
             {
@@ -602,8 +586,7 @@ public sealed class ConsoleForm : Form
             _channel.SelectedItem = channel;
         if (settings.ConsoleWidth >= MinimumSize.Width && settings.ConsoleHeight >= MinimumSize.Height)
             Size = new Size(settings.ConsoleWidth, settings.ConsoleHeight);
-        AppendLog("查詢、套用與手動 ISAPI 會呼叫已安裝的 hik-isapi。請先在專案目錄執行：");
-        AppendLog("python -m pip install -e .");
+        AppendLog("查詢、套用與手動 ISAPI 都在這個程式裡完成，不必另外安裝 Python。");
         AppendLog("即時影像每秒抓一張 JPEG。101 是可見光，201 是熱成像。");
         if (warning != null)
             AppendLog(warning);

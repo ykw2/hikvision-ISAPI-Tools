@@ -2,7 +2,6 @@ namespace HikIsapi;
 
 public sealed class BatchForm : Form
 {
-    private readonly TextBox _python = new() { PlaceholderText = "空白則自動尋找" };
     private readonly TextBox _inventory = new();
     private readonly TextBox _profile = new();
     private readonly TextBox _workDir = new() { PlaceholderText = "空白則用清單所在目錄，報告寫到其下的 results" };
@@ -29,8 +28,8 @@ public sealed class BatchForm : Form
     private readonly Label _status = new() { Text = "就緒", AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
     private readonly Button _stop = new() { Text = "停止", Enabled = false, AutoSize = true, MinimumSize = new Size(88, 32) };
     private readonly List<Control> _lockables = new();
-    private readonly ProcessRunner _runner = new();
     private readonly string _settingsPath = UiSettingsStore.DefaultPath();
+    private string _savedPython = "";
     private Panel? _settingsScroll;
     private CancellationTokenSource? _runCts;
     private bool _busy;
@@ -93,7 +92,6 @@ public sealed class BatchForm : Form
         stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         var files = CreateGrid();
-        AddFileRow(files, "Python", _python, (_, _) => BrowseFile(_python, "Python (python.exe)|python.exe|所有檔案 (*.*)|*.*"));
         AddFileRow(files, "清單", _inventory, (_, _) =>
         {
             BrowseFile(_inventory, "CSV (*.csv)|*.csv|所有檔案 (*.*)|*.*");
@@ -126,11 +124,10 @@ public sealed class BatchForm : Form
             MaximumSize = new Size(900, 0),
             ForeColor = SystemColors.GrayText,
             Margin = new Padding(0, 4, 0, 8),
-            Text = "密碼只放進這次啟動的環境變數，不會寫進設定檔，也不會出現在命令列。清單某一列自己有密碼時，仍以那一列為準。正式套用前會再詢問一次。",
+            Text = "密碼只留在這次執行的記憶體，不會寫進設定檔，也不會出現在紀錄。清單某一列自己有密碼時，仍以那一列為準。正式套用前會再詢問一次。",
         };
 
         var buttons = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Dock = DockStyle.Top, Margin = new Padding(0, 0, 0, 8) };
-        buttons.Controls.Add(ActionButton("檢查環境", CheckPythonAsync));
         buttons.Controls.Add(ActionButton("檢查清單", () => RunBatch(BatchCommand.Validate, dryRun: false, retryFailed: "")));
         buttons.Controls.Add(ActionButton("探測連線", () => RunBatch(BatchCommand.Probe, dryRun: false, retryFailed: "")));
         buttons.Controls.Add(ActionButton("演練", () => RunBatch(BatchCommand.Apply, dryRun: true, retryFailed: "")));
@@ -315,45 +312,15 @@ public sealed class BatchForm : Form
         }
     }
 
-    private async Task CheckPythonAsync()
-    {
-        var python = PythonCommand.ResolveExecutable(_python.Text, OperatingSystem.IsWindows(), name => PythonCommand.FindOnPath(name), out var error);
-        if (python == null)
-        {
-            ShowError(error ?? "找不到 Python");
-            return;
-        }
-        var arguments = PythonCommand.InterpreterPrefix(python).ToList();
-        arguments.Add("-c");
-        arguments.Add("import hik_isapi; print(hik_isapi.__version__)");
-        var plan = new LaunchPlan
-        {
-            FileName = python,
-            Arguments = arguments,
-            WorkingDirectory = Directory.Exists(_workDir.Text) ? _workDir.Text : AppContext.BaseDirectory,
-            Environment = LaunchPlanner.BuildEnvironment(_passwordEnv.Text, null),
-            DisplayCommand = CliPlan.FormatCommand(python, arguments),
-        };
-        AppendLog("確認 hik-isapi 是否已安裝在這支 Python");
-        await ExecuteAsync(plan);
-    }
-
     private async Task RunBatch(BatchCommand command, bool dryRun, string retryFailed)
     {
         var options = ReadBatchOptions();
         options.DryRun = dryRun;
         options.RetryFailed = retryFailed;
-        if (!LaunchPlanner.TryCreateBatch(
-                command,
-                options,
-                _python.Text,
-                _password.Text,
-                OperatingSystem.IsWindows(),
-                name => PythonCommand.FindOnPath(name),
-                out var plan,
-                out var error))
+        var error = CliPlan.CheckBatch(command, options);
+        if (error != null)
         {
-            ShowError(error ?? "無法建立命令");
+            ShowError(error);
             return;
         }
         if (command == BatchCommand.Apply && !dryRun)
@@ -368,7 +335,7 @@ public sealed class BatchForm : Form
             }
         }
         SaveSettings();
-        await ExecuteAsync(plan!);
+        await ExecuteLocalAsync(token => BatchJobs.RunAsync(command, options, _password.Text, AppendLog, token));
     }
 
     private async Task RetryFailedAsync()
@@ -389,42 +356,28 @@ public sealed class BatchForm : Form
     private async Task RunGetAsync()
     {
         var options = ReadGetOptions();
-        if (!LaunchPlanner.TryCreateGet(
-                options,
-                _python.Text,
-                _password.Text,
-                OperatingSystem.IsWindows(),
-                name => PythonCommand.FindOnPath(name),
-                out var plan,
-                out var error))
+        var error = CliPlan.CheckGet(options);
+        if (error != null)
         {
-            ShowError(error ?? "無法建立命令");
+            ShowError(error);
             return;
         }
         SaveSettings();
-        await ExecuteAsync(plan!);
+        await ExecuteLocalAsync(token => BatchJobs.GetAsync(options, _password.Text, AppendLog, token));
     }
 
-    private async Task ExecuteAsync(LaunchPlan plan)
+    private async Task ExecuteLocalAsync(Func<CancellationToken, Task<int>> action)
     {
-        AppendLog("> " + plan.DisplayCommand);
         _runCts = new CancellationTokenSource();
         SetBusy(true);
         try
         {
-            var code = await _runner.RunAsync(new ProcessRequest
-            {
-                FileName = plan.FileName,
-                Arguments = plan.Arguments,
-                WorkingDirectory = plan.WorkingDirectory,
-                Environment = plan.Environment,
-            }, AppendLog, _runCts.Token);
+            var code = await action(_runCts.Token);
             var summary = code switch
             {
                 0 => "完成",
                 -1 => "已停止",
                 2 => "設定錯誤",
-                130 => "已中斷",
                 _ => "結束時有失敗",
             };
             _status.Text = $"{summary}（結束碼 {code}）";
@@ -503,7 +456,7 @@ public sealed class BatchForm : Form
     private void LoadSettings()
     {
         var settings = UiSettingsStore.LoadOrNew(_settingsPath, out var warning);
-        _python.Text = settings.PythonPath;
+        _savedPython = settings.PythonPath;
         _inventory.Text = settings.InventoryPath;
         _profile.Text = settings.ProfilePath;
         _workDir.Text = settings.WorkDirectory;
@@ -527,8 +480,7 @@ public sealed class BatchForm : Form
         _getOutput.Text = settings.GetOutput;
         if (settings.WindowWidth >= MinimumSize.Width && settings.WindowHeight >= MinimumSize.Height)
             Size = new Size(settings.WindowWidth, settings.WindowHeight);
-        AppendLog("視窗會呼叫同一套 hik-isapi。請先安裝 Python 3.11 以上，並在專案目錄執行：");
-        AppendLog("py -3 -m pip install -e .");
+        AppendLog("查詢、套用與批次設定都在這個程式裡完成，不必另外安裝 Python。");
         AppendLog("建議順序：檢查清單、探測連線、演練、再小批套用。數量上限空白代表全部符合條件的攝影機。");
         if (warning != null)
             AppendLog(warning);
@@ -538,31 +490,29 @@ public sealed class BatchForm : Form
     {
         try
         {
-            var settings = new UiSettings
-            {
-                PythonPath = _python.Text.Trim(),
-                InventoryPath = _inventory.Text.Trim(),
-                ProfilePath = _profile.Text.Trim(),
-                WorkDirectory = _workDir.Text.Trim(),
-                Username = _username.Text.Trim(),
-                PasswordEnv = _passwordEnv.Text.Trim(),
-                Tags = _tags.Text.Trim(),
-                Only = _only.Text.Trim(),
-                Limit = _limit.Text.Trim(),
-                Offset = _offset.Text.Trim(),
-                Concurrency = _concurrency.Text.Trim(),
-                Timeout = _timeout.Text.Trim(),
-                Retries = _retries.Text.Trim(),
-                MaxFailureRatio = _ratio.Text.Trim(),
-                SafetySamples = _samples.Text.Trim(),
-                DisableSafety = _disableSafety.Checked,
-                GetHost = _getHost.Text.Trim(),
-                GetPort = _getPort.Text.Trim(),
-                GetPath = _getPath.Text.Trim(),
-                GetHttps = _getHttps.Checked,
-                GetVerifyTls = _getVerifyTls.Checked,
-                GetOutput = _getOutput.Text.Trim(),
-            };
+            var settings = UiSettingsStore.LoadOrNew(_settingsPath, out _);
+            settings.PythonPath = _savedPython;
+            settings.InventoryPath = _inventory.Text.Trim();
+            settings.ProfilePath = _profile.Text.Trim();
+            settings.WorkDirectory = _workDir.Text.Trim();
+            settings.Username = _username.Text.Trim();
+            settings.PasswordEnv = _passwordEnv.Text.Trim();
+            settings.Tags = _tags.Text.Trim();
+            settings.Only = _only.Text.Trim();
+            settings.Limit = _limit.Text.Trim();
+            settings.Offset = _offset.Text.Trim();
+            settings.Concurrency = _concurrency.Text.Trim();
+            settings.Timeout = _timeout.Text.Trim();
+            settings.Retries = _retries.Text.Trim();
+            settings.MaxFailureRatio = _ratio.Text.Trim();
+            settings.SafetySamples = _samples.Text.Trim();
+            settings.DisableSafety = _disableSafety.Checked;
+            settings.GetHost = _getHost.Text.Trim();
+            settings.GetPort = _getPort.Text.Trim();
+            settings.GetPath = _getPath.Text.Trim();
+            settings.GetHttps = _getHttps.Checked;
+            settings.GetVerifyTls = _getVerifyTls.Checked;
+            settings.GetOutput = _getOutput.Text.Trim();
             if (WindowState == FormWindowState.Normal)
             {
                 settings.WindowWidth = Width;

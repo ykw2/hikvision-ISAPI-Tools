@@ -237,10 +237,22 @@ public sealed class DigestHttp : IDisposable
         _client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/xml, application/json;q=0.9, */*;q=0.8");
     }
 
-    public async Task<DigestResponse> GetAsync(Uri uri, string username, string password, CancellationToken cancellationToken)
+    public Task<DigestResponse> GetAsync(Uri uri, string username, string password, CancellationToken cancellationToken)
+        => SendAsync(uri, "GET", username, password, null, null, null, cancellationToken);
+
+    public async Task<DigestResponse> SendAsync(
+        Uri uri,
+        string method,
+        string username,
+        string password,
+        byte[]? content,
+        string? contentType,
+        IReadOnlyDictionary<string, string>? headers,
+        CancellationToken cancellationToken)
     {
+        var verb = string.IsNullOrWhiteSpace(method) ? "GET" : method.Trim().ToUpperInvariant();
         var challenge = _cached;
-        var first = await SendOnceAsync(uri, challenge, username, password, cancellationToken).ConfigureAwait(false);
+        var first = await SendOnceAsync(uri, verb, challenge, username, password, content, contentType, headers, cancellationToken).ConfigureAwait(false);
         if (first.StatusCode != 401)
         {
             NoteSuccess(first, challenge);
@@ -253,7 +265,7 @@ public sealed class DigestHttp : IDisposable
         }
         _cached = next;
         _nc = 0;
-        var second = await SendOnceAsync(uri, next, username, password, cancellationToken).ConfigureAwait(false);
+        var second = await SendOnceAsync(uri, verb, next, username, password, content, contentType, headers, cancellationToken).ConfigureAwait(false);
         if (second.StatusCode == 401)
             _cached = null;
         else
@@ -283,26 +295,45 @@ public sealed class DigestHttp : IDisposable
 
     private async Task<DigestResponse> SendOnceAsync(
         Uri uri,
+        string method,
         DigestChallenge? challenge,
         string username,
         string password,
+        byte[]? content,
+        string? contentType,
+        IReadOnlyDictionary<string, string>? headers,
         CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        using var request = new HttpRequestMessage(new HttpMethod(method), uri);
         request.Headers.ConnectionClose = true;
+        if (headers != null)
+        {
+            foreach (var header in headers)
+            {
+                if (header.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+        }
+        if (content != null)
+        {
+            request.Content = new ByteArrayContent(content);
+            if (!string.IsNullOrWhiteSpace(contentType))
+                request.Content.Headers.TryAddWithoutValidation("Content-Type", contentType);
+        }
         if (challenge != null)
         {
             _nc++;
             var cnonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(8)).ToLowerInvariant();
-            var header = DigestCalculator.AuthorizationHeader(
-                "GET",
+            var authorization = DigestCalculator.AuthorizationHeader(
+                method,
                 uri.PathAndQuery,
                 username,
                 password,
                 challenge,
                 cnonce,
                 _nc);
-            request.Headers.TryAddWithoutValidation("Authorization", header);
+            request.Headers.TryAddWithoutValidation("Authorization", authorization);
         }
         try
         {

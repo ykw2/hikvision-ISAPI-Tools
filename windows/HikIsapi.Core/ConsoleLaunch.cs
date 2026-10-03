@@ -38,6 +38,27 @@ public static class ConsoleLaunch
     public const string ThermalPath = "/ISAPI/Thermal/channels/1/thermometry/basicParam";
     public const string RebootPath = "/ISAPI/System/reboot";
 
+    public static bool TryPrepare(ConsoleTask task, ConsoleInput input, out IReadOnlyList<string> addresses, out string? error)
+    {
+        addresses = Array.Empty<string>();
+        if (!IpRangeParser.TryParse(input.IpInput, out var parsed, out error))
+            return false;
+        if (string.IsNullOrEmpty(input.Password))
+        {
+            error = "請輸入密碼";
+            return false;
+        }
+        if (task == ConsoleTask.SetTemp && !TryTemperature(input.Alert, "預警", out error))
+            return false;
+        if (task == ConsoleTask.SetTemp && !TryTemperature(input.Alarm, "警告", out error))
+            return false;
+        if (task == ConsoleTask.Manual && !TryManual(input, out error))
+            return false;
+        addresses = parsed;
+        error = null;
+        return true;
+    }
+
     public static bool TryCreate(
         ConsoleTask task,
         ConsoleInput input,
@@ -49,20 +70,9 @@ public static class ConsoleLaunch
         out string? error)
     {
         plan = null;
-        if (!IpRangeParser.TryParse(input.IpInput, out var addresses, out error))
+        if (!TryPrepare(task, input, out var addresses, out error))
             return false;
-        if (string.IsNullOrEmpty(input.Password))
-        {
-            error = "請輸入密碼";
-            return false;
-        }
         var username = string.IsNullOrWhiteSpace(input.Username) ? "admin" : input.Username.Trim();
-        if (task == ConsoleTask.SetTemp && !TryTemperature(input.Alert, "預警", out error))
-            return false;
-        if (task == ConsoleTask.SetTemp && !TryTemperature(input.Alarm, "警告", out error))
-            return false;
-        if (task == ConsoleTask.Manual && !TryManual(input, out error))
-            return false;
 
         Directory.CreateDirectory(jobDirectory);
         var inventory = Path.Combine(jobDirectory, "cameras.csv");
