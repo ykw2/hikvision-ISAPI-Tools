@@ -58,22 +58,48 @@ public sealed class ConsoleForm : Form
         var batch = new ToolStripMenuItem("批次設定檔");
         batch.Click += (_, _) => new BatchForm().Show(this);
         menu.Items.Add(batch);
-
         Controls.Add(_split);
         Controls.Add(menu);
 
-        var top = _split.Panel1;
-        var ipGroup = Group("目標相機 IP 設定 (支援單一 / 範圍 / 分號隔開)", 15, 12, 455, 168);
-        top.Controls.Add(ipGroup);
-        var ipRow = Row(10, 22, 435, 32);
-        ipGroup.Controls.Add(ipRow);
-        ipRow.Controls.Add(Caption("相機 IP / 範圍:", 3));
-        _ip.Font = Font;
-        _ip.Margin = new Padding(0, 2, 0, 0);
+        var workspace = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Padding = new Padding(12, 8, 12, 8),
+        };
+        workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 520));
+        workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        workspace.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        _split.Panel1.Controls.Add(workspace);
+        workspace.Controls.Add(BuildControls(), 0, 0);
+        workspace.Controls.Add(BuildLive(), 1, 0);
+
+        var logHost = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 4, 12, 8) };
+        _log.Dock = DockStyle.Fill;
+        _log.Multiline = true;
+        _log.ScrollBars = ScrollBars.Both;
+        _log.WordWrap = false;
+        _log.ReadOnly = true;
+        _log.BackColor = Color.White;
+        _log.Font = new Font(FontFamily.GenericMonospace, 9.5f);
+        logHost.Controls.Add(_log);
+        _split.Panel2.Controls.Add(logHost);
+    }
+
+    private Control BuildControls()
+    {
+        var stack = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Margin = new Padding(0, 0, 12, 0) };
+        stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        stack.RowStyles.Add(new RowStyle(SizeType.Absolute, 156));
+        stack.RowStyles.Add(new RowStyle(SizeType.Absolute, 74));
+        stack.RowStyles.Add(new RowStyle(SizeType.Absolute, 74));
+        stack.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        stack.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        stack.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+
         _ip.Items.AddRange(new object[] { "192.168.38.201", "192.168.38.1-10" });
-        ipRow.Controls.Add(_ip);
-        _network.SetBounds(12, 58, 430, 100);
-        _network.Font = new Font("Microsoft JhengHei UI", 8.5f);
+        _network.Font = Font;
         _network.ForeColor = Color.DarkBlue;
         _network.BackColor = SystemColors.Control;
         _network.BorderStyle = BorderStyle.None;
@@ -81,123 +107,165 @@ public sealed class ConsoleForm : Form
         _network.ReadOnly = true;
         _network.ScrollBars = ScrollBars.Vertical;
         _network.Text = NetworkInfo();
-        ipGroup.Controls.Add(_network);
+        var ipTable = Grid(2, new ColumnStyle(SizeType.Absolute, 108), new ColumnStyle(SizeType.Percent, 100));
+        ipTable.RowCount = 2;
+        ipTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        ipTable.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        ipTable.Controls.Add(FieldLabel("相機 IP / 範圍"), 0, 0);
+        DockField(_ip, right: 0);
+        ipTable.Controls.Add(_ip, 1, 0);
+        DockField(_network, 0, 0, 0);
+        ipTable.SetColumnSpan(_network, 2);
+        ipTable.Controls.Add(_network, 0, 1);
+        stack.Controls.Add(Section("目標相機 IP（單一、範圍或分號）", ipTable), 0, 0);
 
-        var auth = Group("登入憑證設定 (Credentials)", 15, 186, 455, 64);
-        top.Controls.Add(auth);
-        var authRow = Row(10, 22, 435, 34);
-        auth.Controls.Add(authRow);
-        authRow.Controls.Add(Caption("帳號:", 3));
-        authRow.Controls.Add(_user);
-        authRow.Controls.Add(Caption("密碼:", 8));
         _password.PlaceholderText = "不會存檔";
-        authRow.Controls.Add(_password);
+        var auth = Grid(5,
+            new ColumnStyle(SizeType.Absolute, 48),
+            new ColumnStyle(SizeType.Percent, 40),
+            new ColumnStyle(SizeType.Absolute, 48),
+            new ColumnStyle(SizeType.Percent, 60),
+            new ColumnStyle(SizeType.Absolute, 72));
+        auth.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        auth.Controls.Add(FieldLabel("帳號"), 0, 0);
+        DockField(_user);
+        auth.Controls.Add(_user, 1, 0);
+        auth.Controls.Add(FieldLabel("密碼"), 2, 0);
+        DockField(_password);
+        auth.Controls.Add(_password, 3, 0);
         StyleButton(_showPassword, Color.FromArgb(230, 235, 240), Color.FromArgb(210, 218, 226), Color.FromArgb(190, 200, 210), Color.FromArgb(40, 40, 40), 6, 8.5f);
-        _showPassword.Margin = new Padding(6, 1, 0, 0);
+        _showPassword.Dock = DockStyle.Fill;
+        _showPassword.Margin = new Padding(0, 6, 0, 6);
         _showPassword.Click += (_, _) => TogglePassword();
-        authRow.Controls.Add(_showPassword);
+        auth.Controls.Add(_showPassword, 4, 0);
+        stack.Controls.Add(Section("登入憑證", auth), 0, 1);
 
-        var temp = Group("欲修改的新數值設定", 15, 256, 455, 64);
-        top.Controls.Add(temp);
-        var tempRow = Row(10, 22, 435, 34);
-        temp.Controls.Add(tempRow);
-        tempRow.Controls.Add(Caption("預警(Alert):", 3));
-        tempRow.Controls.Add(_alert);
-        tempRow.Controls.Add(Caption("警告(Alarm):", 10));
-        tempRow.Controls.Add(_alarm);
+        var temp = Grid(4,
+            new ColumnStyle(SizeType.Absolute, 92),
+            new ColumnStyle(SizeType.Percent, 50),
+            new ColumnStyle(SizeType.Absolute, 108),
+            new ColumnStyle(SizeType.Percent, 50));
+        temp.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        temp.Controls.Add(FieldLabel("預警 (Alert)"), 0, 0);
+        DockField(_alert);
+        temp.Controls.Add(_alert, 1, 0);
+        temp.Controls.Add(FieldLabel("警告 (Alarm)"), 2, 0);
+        DockField(_alarm, right: 0);
+        temp.Controls.Add(_alarm, 3, 0);
+        stack.Controls.Add(Section("欲修改的新數值", temp), 0, 2);
 
-        var manual = Group("手動 ISAPI（送出＝原樣；套用新溫度＝合併寫入）", 15, 326, 455, 150);
-        top.Controls.Add(manual);
-        var manualRow = Row(10, 22, 435, 34);
-        manual.Controls.Add(manualRow);
-        manualRow.Controls.Add(Caption("方法:", 3));
         _method.Items.AddRange(new object[] { "GET", "PUT", "POST", "DELETE" });
         _method.SelectedIndex = 0;
-        _method.Margin = new Padding(0, 2, 6, 0);
-        manualRow.Controls.Add(_method);
-        manualRow.Controls.Add(_path);
-        StyleButton(_send, Color.FromArgb(0, 120, 212), Color.FromArgb(16, 110, 190), Color.FromArgb(0, 90, 158), Color.White, 6, 8.5f);
-        _send.Margin = new Padding(6, 0, 4, 0);
-        _send.Click += async (_, _) => await Guard(() => RunJobAsync(ConsoleTask.Manual));
-        manualRow.Controls.Add(_send);
-        StyleButton(_stop, Color.FromArgb(90, 98, 104), Color.FromArgb(70, 76, 82), Color.FromArgb(52, 58, 64), Color.White, 6, 8.5f);
-        _stop.Margin = new Padding(0, 0, 0, 0);
-        _stop.Click += (_, _) => _runCts?.Cancel();
-        manualRow.Controls.Add(_stop);
-        _body.SetBounds(10, 58, 435, 82);
         _body.Multiline = true;
         _body.ScrollBars = ScrollBars.Vertical;
         _body.AcceptsReturn = true;
         _body.Font = new Font(FontFamily.GenericMonospace, 9f);
-        _body.PlaceholderText = "GET 可留空。PUT 貼上要送的 XML。";
-        manual.Controls.Add(_body);
+        _body.PlaceholderText = "XML，GET 可留空";
+        var manual = Grid(5,
+            new ColumnStyle(SizeType.Absolute, 48),
+            new ColumnStyle(SizeType.Absolute, 88),
+            new ColumnStyle(SizeType.Percent, 100),
+            new ColumnStyle(SizeType.Absolute, 76),
+            new ColumnStyle(SizeType.Absolute, 76));
+        manual.RowCount = 3;
+        manual.RowStyles.Clear();
+        manual.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        manual.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        manual.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        manual.Controls.Add(FieldLabel("方法"), 0, 0);
+        DockField(_method);
+        manual.Controls.Add(_method, 1, 0);
+        DockField(_path);
+        manual.Controls.Add(_path, 2, 0);
+        StyleButton(_send, Color.FromArgb(0, 120, 212), Color.FromArgb(16, 110, 190), Color.FromArgb(0, 90, 158), Color.White, 6, 8.5f);
+        _send.Dock = DockStyle.Fill;
+        _send.Margin = new Padding(0, 4, 6, 4);
+        _send.Click += async (_, _) => await Guard(() => RunJobAsync(ConsoleTask.Manual));
+        manual.Controls.Add(_send, 3, 0);
+        StyleButton(_stop, Color.FromArgb(90, 98, 104), Color.FromArgb(70, 76, 82), Color.FromArgb(52, 58, 64), Color.White, 6, 8.5f);
+        _stop.Dock = DockStyle.Fill;
+        _stop.Margin = new Padding(0, 4, 0, 4);
+        _stop.Click += (_, _) => _runCts?.Cancel();
+        manual.Controls.Add(_stop, 4, 0);
+        var hint = new Label
+        {
+            Text = "送出＝原樣送出。套用溫度＝只改預警與警告。",
+            Dock = DockStyle.Fill,
+            ForeColor = SystemColors.GrayText,
+            TextAlign = ContentAlignment.MiddleLeft,
+            AutoEllipsis = true,
+        };
+        manual.SetColumnSpan(hint, 5);
+        manual.Controls.Add(hint, 0, 1);
+        DockField(_body, 0, 0, 0);
+        manual.SetColumnSpan(_body, 5);
+        manual.Controls.Add(_body, 0, 2);
+        stack.Controls.Add(Section("手動 ISAPI", manual), 0, 3);
 
-        var info = ActionButton("查詢相機型號與序號 (DeviceInfo)", 15, 484, 455, 36,
-            Color.FromArgb(0, 120, 212), Color.FromArgb(16, 110, 190), Color.FromArgb(0, 90, 158), 9f);
+        var info = new Button { Text = "查詢相機型號與序號", Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 4) };
+        StyleButton(info, Color.FromArgb(0, 120, 212), Color.FromArgb(16, 110, 190), Color.FromArgb(0, 90, 158), Color.White, 8, 9f);
         info.Click += async (_, _) => await Guard(() => RunJobAsync(ConsoleTask.DeviceInfo));
-        top.Controls.Add(info);
+        stack.Controls.Add(info, 0, 4);
 
-        var buttons = new TableLayoutPanel
-        {
-            Location = new Point(15, 526),
-            Size = new Size(455, 40),
-            ColumnCount = 3,
-            RowCount = 1,
-        };
-        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
-        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
-        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.34f));
-        top.Controls.Add(buttons);
-        buttons.Controls.Add(TaskButton("即時溫度查詢", 0, Color.FromArgb(0, 130, 137), Color.FromArgb(0, 110, 116), Color.FromArgb(0, 90, 95), ConsoleTask.QueryTemp), 0, 0);
-        buttons.Controls.Add(TaskButton("套用新溫度", 2, Color.FromArgb(16, 124, 65), Color.FromArgb(14, 109, 56), Color.FromArgb(11, 90, 46), ConsoleTask.SetTemp), 1, 0);
-        buttons.Controls.Add(TaskButton("遠端重啟設備", 2, Color.FromArgb(209, 52, 56), Color.FromArgb(177, 45, 48), Color.FromArgb(142, 36, 38), ConsoleTask.Reboot), 2, 0);
+        var buttons = Grid(3, new ColumnStyle(SizeType.Percent, 34), new ColumnStyle(SizeType.Percent, 33), new ColumnStyle(SizeType.Percent, 33));
+        buttons.Margin = new Padding(0, 2, 0, 0);
+        buttons.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var query = TaskButton("即時溫度查詢", new Padding(0, 2, 4, 2), Color.FromArgb(0, 130, 137), Color.FromArgb(0, 110, 116), Color.FromArgb(0, 90, 95), ConsoleTask.QueryTemp);
+        var apply = TaskButton("套用新溫度", new Padding(4, 2, 4, 2), Color.FromArgb(16, 124, 65), Color.FromArgb(14, 109, 56), Color.FromArgb(11, 90, 46), ConsoleTask.SetTemp);
+        var reboot = TaskButton("遠端重啟設備", new Padding(4, 2, 0, 2), Color.FromArgb(209, 52, 56), Color.FromArgb(177, 45, 48), Color.FromArgb(142, 36, 38), ConsoleTask.Reboot);
+        buttons.Controls.Add(query, 0, 0);
+        buttons.Controls.Add(apply, 1, 0);
+        buttons.Controls.Add(reboot, 2, 0);
+        stack.Controls.Add(buttons, 0, 5);
 
-        var liveTitle = new Label
+        Remember(_ip, _user, _password, _showPassword, _alert, _alarm, _method, _path, _body, _send, info, query, apply, reboot);
+        return stack;
+    }
+
+    private Control BuildLive()
+    {
+        var live = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1 };
+        live.RowCount = 4;
+        live.RowStyles.Clear();
+        live.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        live.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        live.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+        live.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        live.Controls.Add(new Label
         {
-            Location = new Point(485, 12),
-            AutoSize = true,
             Text = "Live View 即時影像",
+            Dock = DockStyle.Fill,
             Font = new Font(Font, FontStyle.Bold),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left,
-        };
-        top.Controls.Add(liveTitle);
-        var liveRow = Row(485, 38, 640, 35);
-        liveRow.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        top.Controls.Add(liveRow);
-        liveRow.Controls.Add(Caption("鏡頭頻道:", 0));
+            TextAlign = ContentAlignment.MiddleLeft,
+        }, 0, 0);
+
+        var channel = Grid(3, new ColumnStyle(SizeType.Absolute, 76), new ColumnStyle(SizeType.Percent, 100), new ColumnStyle(SizeType.Absolute, 132));
+        channel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        channel.Controls.Add(FieldLabel("鏡頭頻道"), 0, 0);
         _channel.Items.AddRange(new object[] { "101 (一般/可見光)", "201 (熱成像通道)" });
         _channel.SelectedIndex = 0;
-        _channel.Width = 180;
-        _channel.Margin = new Padding(0, 3, 0, 0);
-        liveRow.Controls.Add(_channel);
+        DockField(_channel);
+        channel.Controls.Add(_channel, 1, 0);
         StyleButton(_liveToggle, Color.FromArgb(43, 87, 154), Color.FromArgb(32, 67, 120), Color.FromArgb(24, 50, 90), Color.White, 6, 9f);
-        _liveToggle.Margin = new Padding(10, 0, 0, 0);
+        _liveToggle.Dock = DockStyle.Fill;
+        _liveToggle.Margin = new Padding(8, 4, 0, 4);
         _liveToggle.Click += ToggleLive;
-        liveRow.Controls.Add(_liveToggle);
-        _liveStatus.SetBounds(485, 76, 640, 22);
+        channel.Controls.Add(_liveToggle, 2, 0);
+        live.Controls.Add(channel, 0, 1);
+
         _liveStatus.Text = "狀態: 停止";
         _liveStatus.ForeColor = Color.DimGray;
-        _liveStatus.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        top.Controls.Add(_liveStatus);
-        _picture.SetBounds(485, 100, 640, 450);
+        _liveStatus.Dock = DockStyle.Fill;
+        _liveStatus.TextAlign = ContentAlignment.MiddleLeft;
+        live.Controls.Add(_liveStatus, 0, 2);
+
+        _picture.Dock = DockStyle.Fill;
+        _picture.Margin = new Padding(0, 4, 0, 0);
         _picture.SizeMode = PictureBoxSizeMode.Zoom;
         _picture.BorderStyle = BorderStyle.FixedSingle;
         _picture.BackColor = Color.Black;
-        _picture.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        top.Controls.Add(_picture);
-
-        _log.SetBounds(15, 6, _split.Panel2.Width - 30, _split.Panel2.Height - 15);
-        _log.Multiline = true;
-        _log.ScrollBars = ScrollBars.Vertical;
-        _log.ReadOnly = true;
-        _log.BackColor = Color.White;
-        _log.Font = new Font(FontFamily.GenericMonospace, 9.5f);
-        _log.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        _split.Panel2.Controls.Add(_log);
-
-        Remember(_ip, _user, _password, _showPassword, _alert, _alarm, _method, _path, _body, _send, info);
-        foreach (Control control in buttons.Controls)
-            _lockables.Add(control);
+        live.Controls.Add(_picture, 0, 3);
+        return live;
     }
 
     protected override void OnShown(EventArgs e)
@@ -205,12 +273,12 @@ public sealed class ConsoleForm : Form
         base.OnShown(e);
         try
         {
-            var limit = _split.Height - 80 - _split.SplitterWidth;
-            if (limit <= 560)
+            var limit = _split.Height - 140 - _split.SplitterWidth;
+            if (limit <= 420)
                 return;
-            _split.Panel2MinSize = 80;
-            _split.Panel1MinSize = 560;
-            _split.SplitterDistance = Math.Min(590, limit);
+            _split.Panel2MinSize = 140;
+            _split.Panel1MinSize = 420;
+            _split.SplitterDistance = Math.Min((int)(_split.Height * 0.70), limit);
         }
         catch (InvalidOperationException)
         {
@@ -562,25 +630,11 @@ public sealed class ConsoleForm : Form
         _showPassword.Invalidate();
     }
 
-    private Button TaskButton(string text, int leftMargin, Color background, Color hover, Color down, ConsoleTask task)
+    private Button TaskButton(string text, Padding margin, Color background, Color hover, Color down, ConsoleTask task)
     {
-        var button = new Button
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(leftMargin, 0, leftMargin == 0 ? 2 : 0, 0),
-            Text = text,
-        };
-        if (leftMargin == 2)
-            button.Margin = new Padding(2, 0, 2, 0);
-        StyleButton(button, background, hover, down, Color.White, 8, 8.5f);
+        var button = new Button { Dock = DockStyle.Fill, Margin = margin, Text = text };
+        StyleButton(button, background, hover, down, Color.White, 8, 9f);
         button.Click += async (_, _) => await Guard(() => RunJobAsync(task));
-        return button;
-    }
-
-    private Button ActionButton(string text, int x, int y, int width, int height, Color background, Color hover, Color down, float fontSize)
-    {
-        var button = new Button { Bounds = new Rectangle(x, y, width, height), Text = text };
-        StyleButton(button, background, hover, down, Color.White, 8, fontSize);
         return button;
     }
 
@@ -590,26 +644,39 @@ public sealed class ConsoleForm : Form
             _lockables.Add(control);
     }
 
-    private static GroupBox Group(string text, int x, int y, int width, int height) => new()
+    private static GroupBox Section(string title, Control content)
     {
-        Bounds = new Rectangle(x, y, width, height),
+        var group = new GroupBox { Text = title, Dock = DockStyle.Fill, Padding = new Padding(10, 4, 10, 8) };
+        content.Dock = DockStyle.Fill;
+        group.Controls.Add(content);
+        return group;
+    }
+
+    private static TableLayoutPanel Grid(int columns, params ColumnStyle[] styles)
+    {
+        var grid = new TableLayoutPanel { Dock = DockStyle.Fill, Margin = new Padding(0) };
+        grid.ColumnCount = columns;
+        grid.RowCount = 1;
+        grid.ColumnStyles.Clear();
+        grid.RowStyles.Clear();
+        foreach (var style in styles)
+            grid.ColumnStyles.Add(style);
+        return grid;
+    }
+
+    private static Label FieldLabel(string text) => new()
+    {
         Text = text,
+        Dock = DockStyle.Fill,
+        TextAlign = ContentAlignment.MiddleLeft,
+        AutoEllipsis = true,
     };
 
-    private static FlowLayoutPanel Row(int x, int y, int width, int height) => new()
+    private static void DockField(Control control, int top = 5, int right = 8, int bottom = 5)
     {
-        Location = new Point(x, y),
-        Size = new Size(width, height),
-        FlowDirection = FlowDirection.LeftToRight,
-        WrapContents = false,
-    };
-
-    private static Label Caption(string text, int left) => new()
-    {
-        AutoSize = true,
-        Text = text,
-        Margin = new Padding(left, 6, 4, 3),
-    };
+        control.Dock = DockStyle.Fill;
+        control.Margin = new Padding(0, top, right, bottom);
+    }
 
     private static string TaskTitle(ConsoleTask task) => task switch
     {
