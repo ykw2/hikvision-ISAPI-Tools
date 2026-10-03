@@ -62,7 +62,7 @@ public sealed class ConsoleForm : Form
         var logHost = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = line * 8 + 28,
+            Height = line * 5 + 24,
             Padding = new Padding(12, 4, 12, 8),
         };
         _log.Dock = DockStyle.Fill;
@@ -76,15 +76,19 @@ public sealed class ConsoleForm : Form
 
         _panes.Panel1.Controls.Add(BuildControls());
         _panes.Panel2.Controls.Add(BuildLive());
+        var actions = BuildActions();
+        var manual = BuildManualHost();
         Controls.Add(_panes);
+        Controls.Add(actions);
+        Controls.Add(manual);
         Controls.Add(logHost);
         Controls.Add(menu);
 
         var area = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1280, 800);
-        MinimumSize = new Size(Math.Min(960, Math.Max(640, area.Width - 80)), Math.Min(640, Math.Max(480, area.Height - 80)));
+        MinimumSize = new Size(Math.Min(960, Math.Max(720, area.Width - 80)), Math.Min(700, Math.Max(520, area.Height - 80)));
         Size = new Size(
-            Math.Min(area.Width - 48, Math.Max(MinimumSize.Width, line * 58)),
-            Math.Min(area.Height - 48, Math.Max(MinimumSize.Height, line * 36)));
+            Math.Min(area.Width - 48, Math.Max(MinimumSize.Width, line * 62)),
+            Math.Min(area.Height - 48, Math.Max(MinimumSize.Height, line * 44)));
     }
 
     private Control BuildControls()
@@ -125,6 +129,42 @@ public sealed class ConsoleForm : Form
                 LabelItem("預警 (Alert)"), FlexItem.Grow(_alert, line * 4),
                 LabelItem("警告 (Alarm)"), FlexItem.Grow(_alarm, line * 4)));
 
+        var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        var content = Stack(ipGroup, authGroup, tempGroup);
+        content.Padding = new Padding(4, 4, 8, 4);
+        scroll.Controls.Add(content);
+        Remember(_ip, _user, _password, _showPassword, _alert, _alarm);
+        return scroll;
+    }
+
+    private Control BuildActions()
+    {
+        var info = TaskButton("查詢相機型號與序號", new Padding(0, 4, 8, 4), Color.FromArgb(0, 120, 212), Color.FromArgb(16, 110, 190), Color.FromArgb(0, 90, 158), ConsoleTask.DeviceInfo);
+        var query = TaskButton("即時溫度查詢", new Padding(0, 4, 8, 4), Color.FromArgb(0, 130, 137), Color.FromArgb(0, 110, 116), Color.FromArgb(0, 90, 95), ConsoleTask.QueryTemp);
+        var apply = TaskButton("套用新溫度", new Padding(0, 4, 8, 4), Color.FromArgb(16, 124, 65), Color.FromArgb(14, 109, 56), Color.FromArgb(11, 90, 46), ConsoleTask.SetTemp);
+        var reboot = TaskButton("遠端重啟設備", new Padding(0, 4, 8, 4), Color.FromArgb(209, 52, 56), Color.FromArgb(177, 45, 48), Color.FromArgb(142, 36, 38), ConsoleTask.Reboot);
+        var bar = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            AutoScroll = false,
+            Padding = new Padding(12, 8, 12, 4),
+            Margin = new Padding(0),
+            Height = TextHeight() * 3,
+        };
+        bar.Controls.Add(info);
+        bar.Controls.Add(query);
+        bar.Controls.Add(apply);
+        bar.Controls.Add(reboot);
+        GrowToChildren(bar);
+        Remember(info, query, apply, reboot);
+        return bar;
+    }
+
+    private Control BuildManualHost()
+    {
+        var line = TextHeight();
         _method.Items.AddRange(new object[] { "GET", "PUT", "POST", "DELETE" });
         _method.SelectedIndex = 0;
         _body.Multiline = true;
@@ -132,7 +172,7 @@ public sealed class ConsoleForm : Form
         _body.AcceptsReturn = true;
         _body.Font = new Font(FontFamily.GenericMonospace, 9f);
         _body.PlaceholderText = "XML，GET 可留空";
-        _body.Height = line * 4;
+        _body.Height = line * 3;
         StyleButton(_send, Color.FromArgb(0, 120, 212), Color.FromArgb(16, 110, 190), Color.FromArgb(0, 90, 158), Color.White, 6, 8.5f);
         _send.Click += async (_, _) => await Guard(() => RunJobAsync(ConsoleTask.Manual));
         SizeToText(_send);
@@ -146,49 +186,87 @@ public sealed class ConsoleForm : Form
             Dock = DockStyle.Top,
             ForeColor = SystemColors.GrayText,
             UseMnemonic = false,
-            MaximumSize = new Size(400, 0),
-            Padding = new Padding(0, 4, 0, 4),
+            MaximumSize = new Size(800, 0),
+            Padding = new Padding(0, 2, 0, 2),
         };
         var manualGroup = Group("手動 ISAPI",
             FlexRow(
                 LabelItem("方法"), FlexItem.Grow(_method, line * 5),
-                LabelItem("路徑"), FlexItem.Grow(_path, line * 8),
+                LabelItem("路徑"), FlexItem.Grow(_path, line * 16),
                 FlexItem.Fixed(_send),
                 FlexItem.Fixed(_stop)),
             hint,
             FixedBlock(_body));
+        manualGroup.Margin = new Padding(0);
         manualGroup.Resize += (_, _) =>
         {
             var width = Math.Max(80, manualGroup.ClientSize.Width - 24);
             if (hint.MaximumSize.Width != width)
                 hint.MaximumSize = new Size(width, 0);
         };
-
-        var info = TaskButton("查詢相機型號與序號", new Padding(0, 4, 8, 4), Color.FromArgb(0, 120, 212), Color.FromArgb(16, 110, 190), Color.FromArgb(0, 90, 158), ConsoleTask.DeviceInfo);
-        var query = TaskButton("即時溫度查詢", new Padding(0, 4, 8, 4), Color.FromArgb(0, 130, 137), Color.FromArgb(0, 110, 116), Color.FromArgb(0, 90, 95), ConsoleTask.QueryTemp);
-        var apply = TaskButton("套用新溫度", new Padding(0, 4, 8, 4), Color.FromArgb(16, 124, 65), Color.FromArgb(14, 109, 56), Color.FromArgb(11, 90, 46), ConsoleTask.SetTemp);
-        var reboot = TaskButton("遠端重啟設備", new Padding(0, 4, 8, 4), Color.FromArgb(209, 52, 56), Color.FromArgb(177, 45, 48), Color.FromArgb(142, 36, 38), ConsoleTask.Reboot);
-        var actions = new FlowLayoutPanel
+        var host = new Panel
         {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            WrapContents = true,
-            FlowDirection = FlowDirection.LeftToRight,
-            Padding = new Padding(0, 8, 0, 4),
-            Margin = new Padding(0),
+            Dock = DockStyle.Bottom,
+            Padding = new Padding(8, 0, 8, 0),
+            Height = line * 10,
         };
-        actions.Controls.Add(info);
-        actions.Controls.Add(query);
-        actions.Controls.Add(apply);
-        actions.Controls.Add(reboot);
+        host.Controls.Add(manualGroup);
+        void FitHost(object? sender, EventArgs e)
+        {
+            var height = manualGroup.Height + host.Padding.Vertical;
+            if (height > line * 4 && host.Height != height)
+                host.Height = height;
+        }
+        manualGroup.SizeChanged += FitHost;
+        host.HandleCreated += FitHost;
+        Remember(_method, _path, _body, _send);
+        return host;
+    }
 
-        var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
-        var content = Stack(ipGroup, authGroup, tempGroup, manualGroup, actions);
-        content.Padding = new Padding(4, 4, 8, 4);
-        scroll.Controls.Add(content);
-        Remember(_ip, _user, _password, _showPassword, _alert, _alarm, _method, _path, _body, _send, info, query, apply, reboot);
-        return scroll;
+    private static void GrowToChildren(FlowLayoutPanel panel)
+    {
+        var busy = false;
+        void Fit(object? sender, EventArgs e)
+        {
+            if (busy)
+                return;
+            var width = panel.ClientSize.Width - panel.Padding.Horizontal;
+            if (width < 40)
+                return;
+            busy = true;
+            try
+            {
+                var pieces = new RowFlow.Piece[panel.Controls.Count];
+                for (var index = 0; index < panel.Controls.Count; index++)
+                {
+                    var child = panel.Controls[index];
+                    pieces[index] = new RowFlow.Piece(
+                        NaturalWidth(child),
+                        0,
+                        child.Margin.Horizontal,
+                        child.Margin.Vertical,
+                        Math.Max(child.Height, Math.Max(child.MinimumSize.Height, child.Font.Height + 8)),
+                        false);
+                }
+
+                var laid = RowFlow.Arrange(pieces, Math.Max(40, width - 8));
+                panel.PerformLayout();
+                var bottom = panel.Padding.Bottom;
+                foreach (Control child in panel.Controls)
+                    bottom = Math.Max(bottom, child.Bottom + child.Margin.Bottom + panel.Padding.Bottom);
+                var height = Math.Max(laid.Height + panel.Padding.Vertical, bottom);
+                if (panel.Height != height)
+                    panel.Height = height;
+            }
+            finally
+            {
+                busy = false;
+            }
+        }
+        panel.HandleCreated += Fit;
+        panel.Resize += Fit;
+        foreach (Control child in panel.Controls)
+            child.SizeChanged += Fit;
     }
 
     private Control BuildLive()
@@ -626,7 +704,7 @@ public sealed class ConsoleForm : Form
             units += ch > 127 ? em : Math.Max(em / 2, 8);
         button.AutoSize = true;
         button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        button.MinimumSize = new Size(units + em, em + 10);
+        button.MinimumSize = new Size(units + em + em / 2, em + 12);
         button.Padding = new Padding(em / 3, 3, em / 3, 3);
     }
 
