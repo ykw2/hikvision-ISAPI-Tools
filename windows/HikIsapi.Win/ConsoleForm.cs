@@ -93,11 +93,13 @@ public sealed class ConsoleForm : Form
     {
         var line = TextHeight();
         var field = line + 18;
-        var chrome = line + 16;
-        var ipHeight = chrome + field + line * 4 + 8;
-        var authHeight = chrome + field * 2 + 8;
-        var tempHeight = chrome + field * 2 + 8;
-        var manualHeight = chrome + field * 2 + line + 8 + line * 5;
+        var labelRow = line + 10;
+        var chrome = line + 22;
+        var slack = 18;
+        var ipHeight = chrome + labelRow + field + line * 4 + slack;
+        var authHeight = chrome + (labelRow + field) * 2 + slack;
+        var tempHeight = chrome + (labelRow + field) * 2 + slack;
+        var manualHeight = chrome + labelRow + field + labelRow + field + labelRow + line * 5 + slack;
         var buttonHeight = field + 8;
         _controlsHeight = ipHeight + authHeight + tempHeight + manualHeight + buttonHeight + buttonHeight + 8;
 
@@ -119,67 +121,63 @@ public sealed class ConsoleForm : Form
         stack.RowStyles.Add(new RowStyle(SizeType.Absolute, buttonHeight));
         stack.RowStyles.Add(new RowStyle(SizeType.Absolute, buttonHeight));
 
-        _ip.Width = 80;
-        _user.Width = 40;
-        _password.Width = 40;
-        _alert.Width = 40;
-        _alarm.Width = 40;
-        _method.Width = 60;
-        _path.Width = 40;
         _ip.Items.AddRange(new object[] { "192.168.38.201", "192.168.38.1-10" });
         _network.Font = Font;
         _network.ForeColor = Color.DarkBlue;
         _network.BackColor = SystemColors.Control;
         _network.TextAlign = ContentAlignment.TopLeft;
         _network.Text = NetworkInfo();
-        var ipTable = Grid(2, new ColumnStyle(SizeType.AutoSize), new ColumnStyle(SizeType.Percent, 100));
-        ipTable.RowCount = 2;
+        var ipTable = Grid(1, new ColumnStyle(SizeType.Percent, 100));
+        ipTable.RowCount = 3;
+        ipTable.RowStyles.Add(new RowStyle(SizeType.Absolute, labelRow));
         ipTable.RowStyles.Add(new RowStyle(SizeType.Absolute, field));
         ipTable.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        ipTable.Controls.Add(FieldLabel("相機 IP / 範圍"), 0, 0);
+        ipTable.Controls.Add(Caption("相機 IP / 範圍"), 0, 0);
         DockField(_ip, right: 0);
-        ipTable.Controls.Add(_ip, 1, 0);
+        ipTable.Controls.Add(_ip, 0, 1);
         _network.Dock = DockStyle.Fill;
         _network.Margin = new Padding(0, 2, 0, 0);
-        ipTable.SetColumnSpan(_network, 2);
-        ipTable.Controls.Add(_network, 0, 1);
+        ipTable.Controls.Add(_network, 0, 2);
         stack.Controls.Add(Section("目標相機 IP（單一、範圍或分號）", ipTable), 0, 0);
 
         _password.PlaceholderText = "不會存檔";
-        var toggleWidth = TextWidth("隱藏") + 22;
-        var auth = Grid(3,
-            new ColumnStyle(SizeType.AutoSize),
-            new ColumnStyle(SizeType.Percent, 100),
-            new ColumnStyle(SizeType.Absolute, toggleWidth));
-        auth.RowCount = 2;
+        var auth = Grid(1, new ColumnStyle(SizeType.Percent, 100));
+        auth.RowCount = 4;
         auth.RowStyles.Clear();
+        auth.RowStyles.Add(new RowStyle(SizeType.Absolute, labelRow));
         auth.RowStyles.Add(new RowStyle(SizeType.Absolute, field));
+        auth.RowStyles.Add(new RowStyle(SizeType.Absolute, labelRow));
         auth.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        auth.Controls.Add(FieldLabel("帳號"), 0, 0);
+        auth.Controls.Add(Caption("帳號"), 0, 0);
         DockField(_user, right: 0);
-        auth.SetColumnSpan(_user, 2);
-        auth.Controls.Add(_user, 1, 0);
-        auth.Controls.Add(FieldLabel("密碼"), 0, 1);
+        auth.Controls.Add(_user, 0, 1);
+        auth.Controls.Add(Caption("密碼"), 0, 2);
+        var passwordRow = Grid(2, new ColumnStyle(SizeType.Percent, 100), new ColumnStyle(SizeType.Absolute, line * 4));
+        passwordRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         DockField(_password);
-        auth.Controls.Add(_password, 1, 1);
+        passwordRow.Controls.Add(_password, 0, 0);
         StyleButton(_showPassword, Color.FromArgb(230, 235, 240), Color.FromArgb(210, 218, 226), Color.FromArgb(190, 200, 210), Color.FromArgb(40, 40, 40), 6, 8.5f);
         _showPassword.Dock = DockStyle.Fill;
-        _showPassword.Margin = new Padding(8, 4, 0, 4);
+        _showPassword.Margin = new Padding(8, 2, 0, 2);
         _showPassword.Click += (_, _) => TogglePassword();
-        auth.Controls.Add(_showPassword, 2, 1);
+        passwordRow.Controls.Add(_showPassword, 1, 0);
+        passwordRow.Dock = DockStyle.Fill;
+        auth.Controls.Add(passwordRow, 0, 3);
         stack.Controls.Add(Section("登入憑證", auth), 0, 1);
 
-        var temp = Grid(2, new ColumnStyle(SizeType.AutoSize), new ColumnStyle(SizeType.Percent, 100));
-        temp.RowCount = 2;
+        var temp = Grid(1, new ColumnStyle(SizeType.Percent, 100));
+        temp.RowCount = 4;
         temp.RowStyles.Clear();
+        temp.RowStyles.Add(new RowStyle(SizeType.Absolute, labelRow));
         temp.RowStyles.Add(new RowStyle(SizeType.Absolute, field));
+        temp.RowStyles.Add(new RowStyle(SizeType.Absolute, labelRow));
         temp.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        temp.Controls.Add(FieldLabel("預警 (Alert)"), 0, 0);
+        temp.Controls.Add(Caption("預警 (Alert)"), 0, 0);
         DockField(_alert, right: 0);
-        temp.Controls.Add(_alert, 1, 0);
-        temp.Controls.Add(FieldLabel("警告 (Alarm)"), 0, 1);
+        temp.Controls.Add(_alert, 0, 1);
+        temp.Controls.Add(Caption("警告 (Alarm)"), 0, 2);
         DockField(_alarm, right: 0);
-        temp.Controls.Add(_alarm, 1, 1);
+        temp.Controls.Add(_alarm, 0, 3);
         stack.Controls.Add(Section("欲修改的新數值", temp), 0, 2);
 
         _method.Items.AddRange(new object[] { "GET", "PUT", "POST", "DELETE" });
@@ -189,51 +187,44 @@ public sealed class ConsoleForm : Form
         _body.AcceptsReturn = true;
         _body.Font = new Font(FontFamily.GenericMonospace, 9f);
         _body.PlaceholderText = "XML，GET 可留空";
-        var methodWidth = TextWidth("DELETE") + 36;
-        var sendWidth = TextWidth("送出") + 28;
-        var stopWidth = TextWidth("停止") + 28;
-        var manual = Grid(5,
-            new ColumnStyle(SizeType.AutoSize),
-            new ColumnStyle(SizeType.Absolute, methodWidth),
-            new ColumnStyle(SizeType.Percent, 100),
-            new ColumnStyle(SizeType.Absolute, sendWidth),
-            new ColumnStyle(SizeType.Absolute, stopWidth));
-        manual.RowCount = 4;
+        var manual = Grid(1, new ColumnStyle(SizeType.Percent, 100));
+        manual.RowCount = 6;
         manual.RowStyles.Clear();
+        manual.RowStyles.Add(new RowStyle(SizeType.Absolute, labelRow));
         manual.RowStyles.Add(new RowStyle(SizeType.Absolute, field));
+        manual.RowStyles.Add(new RowStyle(SizeType.Absolute, labelRow));
         manual.RowStyles.Add(new RowStyle(SizeType.Absolute, field));
-        manual.RowStyles.Add(new RowStyle(SizeType.Absolute, line + 8));
+        manual.RowStyles.Add(new RowStyle(SizeType.Absolute, labelRow));
         manual.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        manual.Controls.Add(FieldLabel("方法"), 0, 0);
-        DockField(_method);
-        manual.Controls.Add(_method, 1, 0);
+        manual.Controls.Add(Caption("方法"), 0, 0);
+        var methodRow = Grid(4,
+            new ColumnStyle(SizeType.Absolute, line * 5),
+            new ColumnStyle(SizeType.Percent, 100),
+            new ColumnStyle(SizeType.Absolute, line * 4),
+            new ColumnStyle(SizeType.Absolute, line * 4));
+        methodRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        DockField(_method, right: 0);
+        methodRow.Controls.Add(_method, 0, 0);
         StyleButton(_send, Color.FromArgb(0, 120, 212), Color.FromArgb(16, 110, 190), Color.FromArgb(0, 90, 158), Color.White, 6, 8.5f);
         _send.Dock = DockStyle.Fill;
-        _send.Margin = new Padding(0, 4, 6, 4);
+        _send.Margin = new Padding(8, 2, 6, 2);
         _send.Click += async (_, _) => await Guard(() => RunJobAsync(ConsoleTask.Manual));
-        manual.Controls.Add(_send, 3, 0);
+        methodRow.Controls.Add(_send, 2, 0);
         StyleButton(_stop, Color.FromArgb(90, 98, 104), Color.FromArgb(70, 76, 82), Color.FromArgb(52, 58, 64), Color.White, 6, 8.5f);
         _stop.Dock = DockStyle.Fill;
-        _stop.Margin = new Padding(0, 4, 0, 4);
+        _stop.Margin = new Padding(0, 2, 0, 2);
         _stop.Click += (_, _) => _runCts?.Cancel();
-        manual.Controls.Add(_stop, 4, 0);
-        manual.Controls.Add(FieldLabel("路徑"), 0, 1);
+        methodRow.Controls.Add(_stop, 3, 0);
+        methodRow.Dock = DockStyle.Fill;
+        manual.Controls.Add(methodRow, 0, 1);
+        manual.Controls.Add(Caption("路徑"), 0, 2);
         DockField(_path, right: 0);
-        manual.SetColumnSpan(_path, 4);
-        manual.Controls.Add(_path, 1, 1);
-        var hint = new Label
-        {
-            Text = "送出＝原樣送出。套用溫度＝只改預警與警告。",
-            Dock = DockStyle.Fill,
-            ForeColor = SystemColors.GrayText,
-            TextAlign = ContentAlignment.MiddleLeft,
-            UseMnemonic = false,
-        };
-        manual.SetColumnSpan(hint, 5);
-        manual.Controls.Add(hint, 0, 2);
+        manual.Controls.Add(_path, 0, 3);
+        var hint = Caption("送出＝原樣送出。套用溫度＝只改預警與警告。");
+        hint.ForeColor = SystemColors.GrayText;
+        manual.Controls.Add(hint, 0, 4);
         DockField(_body, 0, 0, 0);
-        manual.SetColumnSpan(_body, 5);
-        manual.Controls.Add(_body, 0, 3);
+        manual.Controls.Add(_body, 0, 5);
         stack.Controls.Add(Section("手動 ISAPI", manual), 0, 3);
 
         var info = new Button { Text = "查詢相機型號與序號", Dock = DockStyle.Fill, Margin = new Padding(0, 4, 0, 4) };
@@ -259,12 +250,13 @@ public sealed class ConsoleForm : Form
 
     private Control BuildLive()
     {
+        var line = TextHeight();
         var live = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1 };
         live.RowCount = 4;
         live.RowStyles.Clear();
-        live.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        live.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-        live.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+        live.RowStyles.Add(new RowStyle(SizeType.Absolute, line + 12));
+        live.RowStyles.Add(new RowStyle(SizeType.Absolute, line + 20));
+        live.RowStyles.Add(new RowStyle(SizeType.Absolute, line + 8));
         live.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         live.Controls.Add(new Label
         {
@@ -275,11 +267,11 @@ public sealed class ConsoleForm : Form
         }, 0, 0);
 
         var channel = Grid(3,
-            new ColumnStyle(SizeType.AutoSize),
+            new ColumnStyle(SizeType.Absolute, line * 6),
             new ColumnStyle(SizeType.Percent, 100),
-            new ColumnStyle(SizeType.Absolute, TextWidth("停止串流") + 36));
+            new ColumnStyle(SizeType.Absolute, line * 6));
         channel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        channel.Controls.Add(FieldLabel("鏡頭頻道"), 0, 0);
+        channel.Controls.Add(Caption("鏡頭頻道"), 0, 0);
         _channel.Items.AddRange(new object[] { "101 (一般/可見光)", "201 (熱成像通道)" });
         _channel.SelectedIndex = 0;
         DockField(_channel);
@@ -726,21 +718,15 @@ public sealed class ConsoleForm : Form
         return Math.Max(title, Math.Max(hint, button * 3 + 24));
     }
 
-    private Label FieldLabel(string text)
+    private static Label Caption(string text) => new()
     {
-        var width = TextWidth(text);
-        return new Label
-        {
-            Text = text,
-            AutoSize = true,
-            AutoEllipsis = false,
-            UseMnemonic = false,
-            Anchor = AnchorStyles.Left,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Margin = new Padding(0, 6, 12, 6),
-            MinimumSize = new Size(width, 0),
-        };
-    }
+        Text = text,
+        Dock = DockStyle.Fill,
+        TextAlign = ContentAlignment.MiddleLeft,
+        AutoEllipsis = false,
+        AutoSize = false,
+        UseMnemonic = false,
+    };
 
     private static void DockField(Control control, int top = 5, int right = 8, int bottom = 5)
     {
