@@ -264,6 +264,48 @@ public sealed class DigestTests
     }
 
     [Fact]
+    public void ReadsNextNonceFromAuthenticationInfo()
+    {
+        Assert.Equal("n2", DigestCalculator.ReadNextNonce("nextnonce=\"n2\", qop=auth, nc=00000001"));
+        Assert.Null(DigestCalculator.ReadNextNonce("qop=auth"));
+    }
+
+    [Fact]
+    public async Task TakesAFreshNonceForEachSnapshot()
+    {
+        var handler = new OneTimeNonceHandler();
+        using var client = new DigestHttp(handler, disposeHandler: true, TimeSpan.FromSeconds(5));
+        var uri = new Uri("http://10.0.0.8/ISAPI/Streaming/channels/101/picture");
+        var first = await client.GetAsync(uri, "admin", "pw", CancellationToken.None);
+        var second = await client.GetAsync(uri, "admin", "pw", CancellationToken.None);
+        Assert.Equal(200, first.StatusCode);
+        Assert.Equal(200, second.StatusCode);
+        Assert.Equal(4, handler.Authorizations.Count);
+        Assert.Null(handler.Authorizations[0]);
+        Assert.Contains("nonce=\"n1\"", handler.Authorizations[1]);
+        Assert.Contains("nc=00000001", handler.Authorizations[1]);
+        Assert.Null(handler.Authorizations[2]);
+        Assert.Contains("nonce=\"n2\"", handler.Authorizations[3]);
+        Assert.Contains("nc=00000001", handler.Authorizations[3]);
+        Assert.All(handler.ConnectionClose, closed => Assert.True(closed));
+    }
+
+    [Fact]
+    public async Task UsesNextNonceOnTheFollowingSnapshot()
+    {
+        var handler = new NextNonceHandler();
+        using var client = new DigestHttp(handler, disposeHandler: true, TimeSpan.FromSeconds(5));
+        var uri = new Uri("http://10.0.0.8/ISAPI/Streaming/channels/101/picture");
+        Assert.Equal(200, (await client.GetAsync(uri, "admin", "pw", CancellationToken.None)).StatusCode);
+        Assert.Equal(200, (await client.GetAsync(uri, "admin", "pw", CancellationToken.None)).StatusCode);
+        Assert.Equal(3, handler.Authorizations.Count);
+        Assert.Null(handler.Authorizations[0]);
+        Assert.Contains("nonce=\"n1\"", handler.Authorizations[1]);
+        Assert.Contains("nonce=\"n2\"", handler.Authorizations[2]);
+        Assert.Contains("nc=00000001", handler.Authorizations[2]);
+    }
+
+    [Fact]
     public async Task KeepsNonceFromRawWwwAuthenticate()
     {
         var handler = new RawChallengeHandler();
@@ -283,6 +325,7 @@ public sealed class DigestTests
         {
             Authorizations.Add(request.Headers.TryGetValues("Authorization", out var values) ? values.FirstOrDefault() : null);
             UserAgents.Add(request.Headers.TryGetValues("User-Agent", out var agents) ? agents.FirstOrDefault() : null);
+            Assert.True(request.Headers.ConnectionClose);
             if (Authorizations.Count == 1)
             {
                 var denied = new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized);
@@ -295,6 +338,73 @@ public sealed class DigestTests
             {
                 Content = new ByteArrayContent(new byte[] { 1, 2, 3 }),
             };
+            return Task.FromResult(ok);
+        }
+    }
+
+    private sealed class OneTimeNonceHandler : HttpMessageHandler
+    {
+        public List<string?> Authorizations { get; } = new();
+        public List<bool?> ConnectionClose { get; } = new();
+        private int _issued;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var authorization = request.Headers.TryGetValues("Authorization", out var values) ? values.FirstOrDefault() : null;
+            Authorizations.Add(authorization);
+            ConnectionClose.Add(request.Headers.ConnectionClose);
+            if (string.IsNullOrEmpty(authorization))
+            {
+                _issued++;
+                var denied = new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized);
+                denied.Headers.TryAddWithoutValidation(
+                    "WWW-Authenticate",
+                    $"Digest qop=\"auth\", realm=\"IP Camera(C2872)\", nonce=\"n{_issued}\", stale=\"FALSE\"");
+                return Task.FromResult(denied);
+            }
+            if (!authorization.Contains($"nonce=\"n{_issued}\"", StringComparison.Ordinal) || !authorization.Contains("nc=00000001", StringComparison.Ordinal))
+            {
+                var denied = new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized);
+                denied.Headers.TryAddWithoutValidation(
+                    "WWW-Authenticate",
+                    $"Digest qop=\"auth\", realm=\"IP Camera(C2872)\", nonce=\"n{_issued}\", stale=\"TRUE\"");
+                return Task.FromResult(denied);
+            }
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(new byte[] { 9 }),
+            });
+        }
+    }
+
+    private sealed class NextNonceHandler : HttpMessageHandler
+    {
+        public List<string?> Authorizations { get; } = new();
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var authorization = request.Headers.TryGetValues("Authorization", out var values) ? values.FirstOrDefault() : null;
+            Authorizations.Add(authorization);
+            if (string.IsNullOrEmpty(authorization))
+            {
+                var denied = new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized);
+                denied.Headers.TryAddWithoutValidation(
+                    "WWW-Authenticate",
+                    "Digest qop=\"auth\", realm=\"IP Camera(C2872)\", nonce=\"n1\", stale=\"FALSE\"");
+                return Task.FromResult(denied);
+            }
+            if (authorization.Contains("nonce=\"n2\"", StringComparison.Ordinal) && authorization.Contains("nc=00000001", StringComparison.Ordinal))
+            {
+                return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(new byte[] { 9 }),
+                });
+            }
+            var ok = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(new byte[] { 9 }),
+            };
+            ok.Headers.TryAddWithoutValidation("Authentication-Info", "nextnonce=\"n2\", qop=auth");
             return Task.FromResult(ok);
         }
     }

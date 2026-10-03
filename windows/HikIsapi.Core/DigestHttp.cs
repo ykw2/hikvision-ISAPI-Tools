@@ -20,6 +20,7 @@ public sealed class DigestResponse
     public int StatusCode { get; init; }
     public byte[] Body { get; init; } = Array.Empty<byte>();
     public string? Challenge { get; init; }
+    public string? NextNonce { get; init; }
     public string? Error { get; init; }
     public bool Unauthorized => StatusCode == 401;
 }
@@ -105,6 +106,14 @@ public static class DigestCalculator
             || word.Equals("Bearer", StringComparison.OrdinalIgnoreCase)
             || word.Equals("Negotiate", StringComparison.OrdinalIgnoreCase)
             || word.Equals("NTLM", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static string? ReadNextNonce(string? header)
+    {
+        if (string.IsNullOrWhiteSpace(header))
+            return null;
+        var pairs = ParsePairs(header);
+        return pairs.TryGetValue("nextnonce", out var nonce) && nonce.Length > 0 ? nonce : null;
     }
 
     public static bool TryParseChallenge(string? header, out DigestChallenge? challenge)
@@ -206,7 +215,15 @@ public sealed class DigestHttp : IDisposable
     private int _nc;
 
     public DigestHttp(TimeSpan? timeout = null)
-        : this(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false }, disposeHandler: true, timeout)
+        : this(new SocketsHttpHandler
+        {
+            AllowAutoRedirect = false,
+            UseProxy = false,
+            UseCookies = false,
+            // 海康抓圖的 nonce 跟這條連線綁在一起，留著連線再送下一張會直接 401。
+            PooledConnectionLifetime = TimeSpan.Zero,
+            ConnectTimeout = TimeSpan.FromSeconds(3),
+        }, disposeHandler: true, timeout)
     {
     }
 
@@ -226,8 +243,7 @@ public sealed class DigestHttp : IDisposable
         var first = await SendOnceAsync(uri, challenge, username, password, cancellationToken).ConfigureAwait(false);
         if (first.StatusCode != 401)
         {
-            if (first.StatusCode is >= 200 and < 300)
-                _cached = challenge;
+            NoteSuccess(first, challenge);
             return first;
         }
         if (!DigestCalculator.TryParseChallenge(first.Challenge, out var next) || next == null)
@@ -240,7 +256,29 @@ public sealed class DigestHttp : IDisposable
         var second = await SendOnceAsync(uri, next, username, password, cancellationToken).ConfigureAwait(false);
         if (second.StatusCode == 401)
             _cached = null;
+        else
+            NoteSuccess(second, next);
         return second;
+    }
+
+    private void NoteSuccess(DigestResponse response, DigestChallenge? challenge)
+    {
+        if (response.StatusCode is < 200 or >= 300 || challenge == null || string.IsNullOrEmpty(response.NextNonce))
+        {
+            // 沒有 nextnonce 就不要把舊 nonce 留到下一張。這台相機用過一次就回 401。
+            _cached = null;
+            _nc = 0;
+            return;
+        }
+        _cached = new DigestChallenge
+        {
+            Realm = challenge.Realm,
+            Nonce = response.NextNonce,
+            Opaque = challenge.Opaque,
+            Qop = challenge.Qop,
+            Algorithm = challenge.Algorithm,
+        };
+        _nc = 0;
     }
 
     private async Task<DigestResponse> SendOnceAsync(
@@ -251,6 +289,7 @@ public sealed class DigestHttp : IDisposable
         CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        request.Headers.ConnectionClose = true;
         if (challenge != null)
         {
             _nc++;
@@ -274,6 +313,7 @@ public sealed class DigestHttp : IDisposable
                 StatusCode = (int)response.StatusCode,
                 Body = body,
                 Challenge = ReadChallenge(response),
+                NextNonce = ReadNextNonce(response),
             };
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -284,6 +324,19 @@ public sealed class DigestHttp : IDisposable
         {
             return new DigestResponse { StatusCode = 0, Error = ex.Message };
         }
+    }
+
+    private static string? ReadNextNonce(HttpResponseMessage response)
+    {
+        if (response.Headers.NonValidated.TryGetValues("Authentication-Info", out var raw))
+        {
+            var nonce = DigestCalculator.ReadNextNonce(string.Join(", ", raw));
+            if (nonce != null)
+                return nonce;
+        }
+        return response.Headers.TryGetValues("Authentication-Info", out var values)
+            ? DigestCalculator.ReadNextNonce(string.Join(", ", values))
+            : null;
     }
 
     private static string? ReadChallenge(HttpResponseMessage response)

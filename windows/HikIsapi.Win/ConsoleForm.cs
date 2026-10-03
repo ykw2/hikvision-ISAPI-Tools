@@ -22,7 +22,7 @@ public sealed class ConsoleForm : Form
     private readonly Label _liveStatus = new();
     private readonly PictureBox _picture = new();
     private readonly System.Windows.Forms.Timer _liveTimer = new() { Interval = 1000 };
-    private readonly DigestHttp _snapshots = new(TimeSpan.FromMilliseconds(2000));
+    private readonly DigestHttp _snapshots = new(TimeSpan.FromSeconds(5));
     private readonly ProcessRunner _runner = new();
     private readonly List<Control> _lockables = new();
     private readonly string _settingsPath = UiSettingsStore.DefaultPath();
@@ -482,6 +482,13 @@ public sealed class ConsoleForm : Form
                 return;
             if (response.Unauthorized)
             {
+                _consecutiveFailures++;
+                if (_picture.Image != null && _consecutiveFailures < 3)
+                {
+                    _liveStatus.Text = $"狀態: 重試中 ({addresses[0]}) [{_consecutiveFailures}/3]";
+                    _liveStatus.ForeColor = Color.DarkOrange;
+                    return;
+                }
                 StopLive("狀態: 401 未授權，已停止串流", Color.Red);
                 MessageBox.Show(this, "即時影像被相機拒絕（HTTP 401）。同一組密碼若可以重啟或查詢，代表帳號可用，請改試頻道 201，或確認這台相機允許 ISAPI 抓圖。", "認證失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
