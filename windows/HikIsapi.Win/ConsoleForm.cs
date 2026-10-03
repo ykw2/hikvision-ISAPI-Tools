@@ -119,14 +119,20 @@ public sealed class ConsoleForm : Form
         stack.RowStyles.Add(new RowStyle(SizeType.Absolute, buttonHeight));
         stack.RowStyles.Add(new RowStyle(SizeType.Absolute, buttonHeight));
 
+        _ip.Width = 80;
+        _user.Width = 40;
+        _password.Width = 40;
+        _alert.Width = 40;
+        _alarm.Width = 40;
+        _method.Width = 60;
+        _path.Width = 40;
         _ip.Items.AddRange(new object[] { "192.168.38.201", "192.168.38.1-10" });
         _network.Font = Font;
         _network.ForeColor = Color.DarkBlue;
         _network.BackColor = SystemColors.Control;
         _network.TextAlign = ContentAlignment.TopLeft;
         _network.Text = NetworkInfo();
-        var ipLabel = TextWidth("相機 IP / 範圍");
-        var ipTable = Grid(2, new ColumnStyle(SizeType.Absolute, ipLabel), new ColumnStyle(SizeType.Percent, 100));
+        var ipTable = Grid(2, new ColumnStyle(SizeType.AutoSize), new ColumnStyle(SizeType.Percent, 100));
         ipTable.RowCount = 2;
         ipTable.RowStyles.Add(new RowStyle(SizeType.Absolute, field));
         ipTable.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -140,10 +146,9 @@ public sealed class ConsoleForm : Form
         stack.Controls.Add(Section("目標相機 IP（單一、範圍或分號）", ipTable), 0, 0);
 
         _password.PlaceholderText = "不會存檔";
-        var nameLabel = Math.Max(TextWidth("帳號"), TextWidth("密碼"));
         var toggleWidth = TextWidth("隱藏") + 22;
         var auth = Grid(3,
-            new ColumnStyle(SizeType.Absolute, nameLabel),
+            new ColumnStyle(SizeType.AutoSize),
             new ColumnStyle(SizeType.Percent, 100),
             new ColumnStyle(SizeType.Absolute, toggleWidth));
         auth.RowCount = 2;
@@ -164,8 +169,7 @@ public sealed class ConsoleForm : Form
         auth.Controls.Add(_showPassword, 2, 1);
         stack.Controls.Add(Section("登入憑證", auth), 0, 1);
 
-        var tempLabel = Math.Max(TextWidth("預警 (Alert)"), TextWidth("警告 (Alarm)"));
-        var temp = Grid(2, new ColumnStyle(SizeType.Absolute, tempLabel), new ColumnStyle(SizeType.Percent, 100));
+        var temp = Grid(2, new ColumnStyle(SizeType.AutoSize), new ColumnStyle(SizeType.Percent, 100));
         temp.RowCount = 2;
         temp.RowStyles.Clear();
         temp.RowStyles.Add(new RowStyle(SizeType.Absolute, field));
@@ -185,12 +189,11 @@ public sealed class ConsoleForm : Form
         _body.AcceptsReturn = true;
         _body.Font = new Font(FontFamily.GenericMonospace, 9f);
         _body.PlaceholderText = "XML，GET 可留空";
-        var manualLabel = Math.Max(TextWidth("方法"), TextWidth("路徑"));
         var methodWidth = TextWidth("DELETE") + 36;
         var sendWidth = TextWidth("送出") + 28;
         var stopWidth = TextWidth("停止") + 28;
         var manual = Grid(5,
-            new ColumnStyle(SizeType.Absolute, manualLabel),
+            new ColumnStyle(SizeType.AutoSize),
             new ColumnStyle(SizeType.Absolute, methodWidth),
             new ColumnStyle(SizeType.Percent, 100),
             new ColumnStyle(SizeType.Absolute, sendWidth),
@@ -272,9 +275,9 @@ public sealed class ConsoleForm : Form
         }, 0, 0);
 
         var channel = Grid(3,
-            new ColumnStyle(SizeType.Absolute, TextWidth("鏡頭頻道")),
+            new ColumnStyle(SizeType.AutoSize),
             new ColumnStyle(SizeType.Percent, 100),
-            new ColumnStyle(SizeType.Absolute, TextWidth("停止串流") + 28));
+            new ColumnStyle(SizeType.Absolute, TextWidth("停止串流") + 36));
         channel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         channel.Controls.Add(FieldLabel("鏡頭頻道"), 0, 0);
         _channel.Items.AddRange(new object[] { "101 (一般/可見光)", "201 (熱成像通道)" });
@@ -702,8 +705,11 @@ public sealed class ConsoleForm : Form
 
     private int TextWidth(string text)
     {
-        var size = TextRenderer.MeasureText(text, Font, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
-        return size.Width + 16;
+        var flags = TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.Left;
+        var proposed = new Size(int.MaxValue, int.MaxValue);
+        var size = TextRenderer.MeasureText(text, Font, proposed, flags);
+        var em = TextRenderer.MeasureText("字", Font, proposed, flags).Width;
+        return size.Width + em + 8;
     }
 
     private int TextHeight()
@@ -720,14 +726,21 @@ public sealed class ConsoleForm : Form
         return Math.Max(title, Math.Max(hint, button * 3 + 24));
     }
 
-    private static Label FieldLabel(string text) => new()
+    private Label FieldLabel(string text)
     {
-        Text = text,
-        Dock = DockStyle.Fill,
-        TextAlign = ContentAlignment.MiddleLeft,
-        AutoEllipsis = false,
-        UseMnemonic = false,
-    };
+        var width = TextWidth(text);
+        return new Label
+        {
+            Text = text,
+            AutoSize = true,
+            AutoEllipsis = false,
+            UseMnemonic = false,
+            Anchor = AnchorStyles.Left,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Margin = new Padding(0, 6, 12, 6),
+            MinimumSize = new Size(width, 0),
+        };
+    }
 
     private static void DockField(Control control, int top = 5, int right = 8, int bottom = 5)
     {
