@@ -30,6 +30,15 @@ public sealed class UiSettings
     public string GetOutput { get; set; } = "";
     public int WindowWidth { get; set; }
     public int WindowHeight { get; set; }
+    public string ConsoleIp { get; set; } = "";
+    public string ConsoleUsername { get; set; } = "admin";
+    public string ConsoleAlert { get; set; } = "220.0";
+    public string ConsoleAlarm { get; set; } = "220.0";
+    public string ConsoleMethod { get; set; } = "GET";
+    public string ConsolePath { get; set; } = "/ISAPI/System/deviceInfo";
+    public string ConsoleChannel { get; set; } = "101 (一般/可見光)";
+    public int ConsoleWidth { get; set; }
+    public int ConsoleHeight { get; set; }
 }
 
 public static class UiSettingsStore

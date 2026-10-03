@@ -1,6 +1,6 @@
 namespace HikIsapi;
 
-public sealed class MainForm : Form
+public sealed class BatchForm : Form
 {
     private readonly TextBox _python = new() { PlaceholderText = "空白則自動尋找" };
     private readonly TextBox _inventory = new();
@@ -35,7 +35,7 @@ public sealed class MainForm : Form
     private CancellationTokenSource? _runCts;
     private bool _busy;
 
-    public MainForm()
+    public BatchForm()
     {
         Text = "海康 ISAPI 批次設定";
         Font = UiFont();
