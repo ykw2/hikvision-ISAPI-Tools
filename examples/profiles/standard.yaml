@@ -1,0 +1,84 @@
+name: standard
+description: 全站鏡頭統一校時、NTP 與 OSD 時間格式
+concurrency: 20
+timeout_seconds: 20
+retries: 2
+retry_backoff_seconds: 0.5
+username: admin
+password_env: HIK_PASSWORD
+use_https: false
+verify_tls: false
+max_failure_ratio: 0.2
+safety_min_samples: 20
+
+vars:
+  ntp_server: "10.1.1.10"
+  # 海康時區是 POSIX 格式。CST-8:00:00 代表 UTC+8，不是 UTC-8。
+  timezone: "CST-8:00:00"
+
+steps:
+  - id: probe
+    description: 確認可以登入並讀到裝置資訊
+    mode: request
+    method: GET
+    path: /ISAPI/System/deviceInfo
+    on_error: abort_camera
+
+  - id: timezone
+    description: 時區與校時模式
+    mode: merge_xml
+    path: /ISAPI/System/time
+    on_error: continue
+    set:
+      timeMode: NTP
+      timeZone: "{{vars.timezone}}"
+
+  - id: ntp
+    description: 第一組 NTP 伺服器
+    mode: merge_xml
+    path: /ISAPI/System/time/ntpServers/1
+    on_error: continue
+    set:
+      addressingFormatType: ipaddress
+      ipAddress: "{{vars.ntp_server}}"
+      portNo: 123
+      synchronizeInterval: 60
+
+  - id: osd
+    description: OSD 時間格式，通道名稱沿用清單的 name
+    mode: merge_xml
+    path: /ISAPI/System/Video/inputs/channels/1/overlays
+    on_error: continue
+    set:
+      DateTimeOverlay/enabled: true
+      DateTimeOverlay/dateStyle: YYYY-MM-DD
+      DateTimeOverlay/timeStyle: 24hour
+      channelNameOverlay/enabled: true
+      channelNameOverlay/channelName: "{{camera.name}}"
+
+  - id: verify_time
+    description: 回讀時間設定
+    mode: assert_xml
+    path: /ISAPI/System/time
+    on_error: continue
+    expect:
+      timeMode: NTP
+      timeZone: "{{vars.timezone}}"
+
+  - id: verify_ntp
+    description: 回讀 NTP
+    mode: assert_xml
+    path: /ISAPI/System/time/ntpServers/1
+    on_error: continue
+    expect:
+      ipAddress: "{{vars.ntp_server}}"
+
+  # 主碼流請先對一台 get /ISAPI/Streaming/channels/101，確認機型有這些節點再打開。
+  # 海康的 maxFrameRate 是 fps 乘以 100，25fps 要填 2500。
+  # - id: main_stream
+  #   mode: merge_xml
+  #   path: /ISAPI/Streaming/channels/101
+  #   on_error: continue
+  #   set:
+  #     Video/maxFrameRate: 2500
+  #     Video/constantBitRate: 4096

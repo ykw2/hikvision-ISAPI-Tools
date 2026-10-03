@@ -1,0 +1,4 @@
+id,host,port,username,password,https,name,enabled,tags,site
+cam-0001,10.1.0.11,80,admin,changeme,false,大門,true,gate;north,A棟
+cam-0002,10.1.0.12,80,admin,changeme,false,停車場,true,parking,A棟
+cam-0003,10.1.0.13,443,admin,changeme,true,倉庫,false,warehouse,B棟

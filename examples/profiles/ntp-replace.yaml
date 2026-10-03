@@ -1,0 +1,26 @@
+name: ntp-replace
+description: 用整份 XML 覆蓋第一組 NTP。只適合欄位與 bodies/ntp-server.xml 一致的機型。
+concurrency: 20
+timeout_seconds: 20
+retries: 2
+username: admin
+password_env: HIK_PASSWORD
+max_failure_ratio: 0.2
+safety_min_samples: 20
+vars:
+  ntp_server: "10.1.1.10"
+steps:
+  - id: probe
+    description: 確認可以登入
+    mode: request
+    method: GET
+    path: /ISAPI/System/deviceInfo
+    on_error: abort_camera
+  - id: put_ntp
+    description: 覆蓋第一組 NTP
+    mode: request
+    method: PUT
+    path: /ISAPI/System/time/ntpServers/1
+    body_file: bodies/ntp-server.xml
+    content_type: application/xml
+    on_error: abort_camera
