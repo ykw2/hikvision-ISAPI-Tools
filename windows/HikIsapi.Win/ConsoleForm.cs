@@ -665,54 +665,45 @@ public sealed class ConsoleForm : Form
         {
             if (busy)
                 return;
-            var width = row.ClientSize.Width - row.Padding.Horizontal;
+            var width = flow.ClientSize.Width;
+            if (width < 40)
+                width = row.ClientSize.Width - row.Padding.Horizontal;
             if (width < 40)
                 return;
             busy = true;
             try
             {
-                var fixedWidth = 0;
-                var flexCount = 0;
-                var flexMin = 0;
-                foreach (var item in items)
+                // Leave a few pixels so the flow panel does not wrap the last button
+                // just because its client width is one pixel shorter than we measured.
+                var usable = Math.Max(40, width - 8);
+                var pieces = new RowFlow.Piece[items.Length];
+                for (var index = 0; index < items.Length; index++)
                 {
-                    if (item.Flex)
-                    {
-                        flexCount++;
-                        flexMin += item.MinWidth + item.Control.Margin.Horizontal;
-                        continue;
-                    }
-                    var preferred = item.Control.GetPreferredSize(Size.Empty).Width;
-                    if (item.Control is Label)
-                    {
-                        fixedWidth += preferred + item.Control.Margin.Horizontal;
-                        continue;
-                    }
-                    fixedWidth += Math.Max(item.Control.Width, preferred) + item.Control.Margin.Horizontal;
+                    var control = items[index].Control;
+                    pieces[index] = new RowFlow.Piece(
+                        items[index].Flex ? 0 : NaturalWidth(control),
+                        items[index].Flex ? Math.Max(items[index].MinWidth, 1) : 0,
+                        control.Margin.Horizontal,
+                        control.Margin.Vertical,
+                        Math.Max(control.Height, Math.Max(control.MinimumSize.Height, control.Font.Height + 6)),
+                        items[index].Flex);
                 }
-                var remain = width - fixedWidth;
-                if (flexCount > 0)
+
+                var laid = RowFlow.Arrange(pieces, usable);
+                for (var index = 0; index < items.Length; index++)
                 {
-                    var share = remain >= flexMin ? remain / flexCount : width;
-                    foreach (var item in items)
-                    {
-                        if (!item.Flex)
-                            continue;
-                        var target = remain >= flexMin
-                            ? Math.Max(item.MinWidth, share - item.Control.Margin.Horizontal)
-                            : Math.Max(item.MinWidth, width - item.Control.Margin.Horizontal);
-                        if (item.Control.Width != target)
-                            item.Control.Width = target;
-                    }
+                    if (!items[index].Flex || items[index].Control.Width == laid.Widths[index])
+                        continue;
+                    items[index].Control.Width = laid.Widths[index];
                 }
+
                 flow.PerformLayout();
-                var preferredHeight = flow.GetPreferredSize(new Size(width, 0)).Height;
-                var tallest = 0;
-                foreach (var item in items)
-                    tallest = Math.Max(tallest, item.Control.Height + item.Control.Margin.Vertical);
-                var height = Math.Max(preferredHeight, tallest) + row.Padding.Vertical;
+                var bottom = 0;
+                foreach (Control child in flow.Controls)
+                    bottom = Math.Max(bottom, child.Bottom + child.Margin.Bottom);
+                var height = Math.Max(laid.Height, bottom) + row.Padding.Vertical;
                 if (row.Height != height)
-                    row.Height = Math.Max(height, tallest);
+                    row.Height = height;
             }
             finally
             {
@@ -722,6 +713,7 @@ public sealed class ConsoleForm : Form
         foreach (var item in items)
         {
             flow.Controls.Add(item.Control);
+            item.Control.SizeChanged += Fit;
             if (item.Control is Button button)
                 button.TextChanged += Fit;
         }
@@ -729,6 +721,40 @@ public sealed class ConsoleForm : Form
         row.Resize += Fit;
         row.HandleCreated += Fit;
         return row;
+    }
+
+    private static int NaturalWidth(Control control)
+    {
+        if (control is Label)
+            return TextSpan(control, extra: control.Font.Height);
+        var chrome = control is ComboBox or TextBox
+            ? control.Font.Height + 8
+            : control.Padding.Horizontal + control.Font.Height / 2;
+        var preferred = 0;
+        try
+        {
+            preferred = control.GetPreferredSize(Size.Empty).Width;
+        }
+        catch (ArgumentException)
+        {
+            preferred = 0;
+        }
+
+        return Math.Max(
+            control.MinimumSize.Width,
+            Math.Max(preferred, Math.Max(control.Width, TextSpan(control, chrome))));
+    }
+
+    private static int TextSpan(Control control, int extra)
+    {
+        if (string.IsNullOrEmpty(control.Text))
+            return Math.Max(extra, 0);
+        var measured = TextRenderer.MeasureText(
+            control.Text,
+            control.Font,
+            new Size(int.MaxValue, int.MaxValue),
+            TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix).Width;
+        return measured + Math.Max(extra, 0);
     }
 
     private static Control FixedBlock(Control control)
