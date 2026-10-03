@@ -40,7 +40,7 @@ public sealed class ConsoleForm : Form
 
     public ConsoleForm()
     {
-        AutoScaleMode = AutoScaleMode.None;
+        AutoScaleMode = AutoScaleMode.Dpi;
         Font = UiFont();
         Text = "海康 ISAPI 操作台";
         Size = new Size(1160, 900);
@@ -68,7 +68,7 @@ public sealed class ConsoleForm : Form
             RowCount = 1,
             Padding = new Padding(12, 8, 12, 8),
         };
-        workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 520));
+        workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 560));
         workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         workspace.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         _split.Panel1.Controls.Add(workspace);
@@ -91,9 +91,9 @@ public sealed class ConsoleForm : Form
     {
         var stack = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Margin = new Padding(0, 0, 12, 0) };
         stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        stack.RowStyles.Add(new RowStyle(SizeType.Absolute, 156));
-        stack.RowStyles.Add(new RowStyle(SizeType.Absolute, 74));
-        stack.RowStyles.Add(new RowStyle(SizeType.Absolute, 74));
+        stack.RowStyles.Add(new RowStyle(SizeType.Absolute, 148));
+        stack.RowStyles.Add(new RowStyle(SizeType.Absolute, 118));
+        stack.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
         stack.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         stack.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
         stack.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
@@ -120,24 +120,26 @@ public sealed class ConsoleForm : Form
         stack.Controls.Add(Section("目標相機 IP（單一、範圍或分號）", ipTable), 0, 0);
 
         _password.PlaceholderText = "不會存檔";
-        var auth = Grid(5,
+        var auth = Grid(3,
             new ColumnStyle(SizeType.Absolute, 48),
-            new ColumnStyle(SizeType.Percent, 40),
-            new ColumnStyle(SizeType.Absolute, 48),
-            new ColumnStyle(SizeType.Percent, 60),
+            new ColumnStyle(SizeType.Percent, 100),
             new ColumnStyle(SizeType.Absolute, 72));
-        auth.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        auth.RowCount = 2;
+        auth.RowStyles.Clear();
+        auth.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        auth.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
         auth.Controls.Add(FieldLabel("帳號"), 0, 0);
-        DockField(_user);
+        DockField(_user, right: 0);
+        auth.SetColumnSpan(_user, 2);
         auth.Controls.Add(_user, 1, 0);
-        auth.Controls.Add(FieldLabel("密碼"), 2, 0);
+        auth.Controls.Add(FieldLabel("密碼"), 0, 1);
         DockField(_password);
-        auth.Controls.Add(_password, 3, 0);
+        auth.Controls.Add(_password, 1, 1);
         StyleButton(_showPassword, Color.FromArgb(230, 235, 240), Color.FromArgb(210, 218, 226), Color.FromArgb(190, 200, 210), Color.FromArgb(40, 40, 40), 6, 8.5f);
         _showPassword.Dock = DockStyle.Fill;
         _showPassword.Margin = new Padding(0, 6, 0, 6);
         _showPassword.Click += (_, _) => TogglePassword();
-        auth.Controls.Add(_showPassword, 4, 0);
+        auth.Controls.Add(_showPassword, 2, 1);
         stack.Controls.Add(Section("登入憑證", auth), 0, 1);
 
         var temp = Grid(4,
@@ -163,20 +165,19 @@ public sealed class ConsoleForm : Form
         _body.PlaceholderText = "XML，GET 可留空";
         var manual = Grid(5,
             new ColumnStyle(SizeType.Absolute, 48),
-            new ColumnStyle(SizeType.Absolute, 88),
+            new ColumnStyle(SizeType.Absolute, 96),
             new ColumnStyle(SizeType.Percent, 100),
             new ColumnStyle(SizeType.Absolute, 76),
             new ColumnStyle(SizeType.Absolute, 76));
-        manual.RowCount = 3;
+        manual.RowCount = 4;
         manual.RowStyles.Clear();
         manual.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
-        manual.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        manual.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        manual.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
         manual.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         manual.Controls.Add(FieldLabel("方法"), 0, 0);
         DockField(_method);
         manual.Controls.Add(_method, 1, 0);
-        DockField(_path);
-        manual.Controls.Add(_path, 2, 0);
         StyleButton(_send, Color.FromArgb(0, 120, 212), Color.FromArgb(16, 110, 190), Color.FromArgb(0, 90, 158), Color.White, 6, 8.5f);
         _send.Dock = DockStyle.Fill;
         _send.Margin = new Padding(0, 4, 6, 4);
@@ -187,6 +188,10 @@ public sealed class ConsoleForm : Form
         _stop.Margin = new Padding(0, 4, 0, 4);
         _stop.Click += (_, _) => _runCts?.Cancel();
         manual.Controls.Add(_stop, 4, 0);
+        manual.Controls.Add(FieldLabel("路徑"), 0, 1);
+        DockField(_path, right: 0);
+        manual.SetColumnSpan(_path, 4);
+        manual.Controls.Add(_path, 1, 1);
         var hint = new Label
         {
             Text = "送出＝原樣送出。套用溫度＝只改預警與警告。",
@@ -196,10 +201,10 @@ public sealed class ConsoleForm : Form
             AutoEllipsis = true,
         };
         manual.SetColumnSpan(hint, 5);
-        manual.Controls.Add(hint, 0, 1);
+        manual.Controls.Add(hint, 0, 2);
         DockField(_body, 0, 0, 0);
         manual.SetColumnSpan(_body, 5);
-        manual.Controls.Add(_body, 0, 2);
+        manual.Controls.Add(_body, 0, 3);
         stack.Controls.Add(Section("手動 ISAPI", manual), 0, 3);
 
         var info = new Button { Text = "查詢相機型號與序號", Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 4) };
@@ -274,11 +279,11 @@ public sealed class ConsoleForm : Form
         try
         {
             var limit = _split.Height - 140 - _split.SplitterWidth;
-            if (limit <= 420)
+            if (limit < 520)
                 return;
             _split.Panel2MinSize = 140;
-            _split.Panel1MinSize = 420;
-            _split.SplitterDistance = Math.Min((int)(_split.Height * 0.70), limit);
+            _split.Panel1MinSize = 520;
+            _split.SplitterDistance = Math.Min(Math.Max(520, (int)(_split.Height * 0.72)), limit);
         }
         catch (InvalidOperationException)
         {
@@ -444,7 +449,7 @@ public sealed class ConsoleForm : Form
             if (response.Unauthorized)
             {
                 StopLive("狀態: 401 未授權，已停止串流", Color.Red);
-                MessageBox.Show(this, "Live View 帳號或密碼錯誤（HTTP 401）。", "認證失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "即時影像被相機拒絕（HTTP 401）。同一組密碼若可以重啟或查詢，代表帳號可用，請改試頻道 201，或確認這台相機允許 ISAPI 抓圖。", "認證失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
             if (response.StatusCode is >= 200 and < 300 && response.Body.Length > 0 && TryImage(response.Body, out var image))
@@ -543,7 +548,7 @@ public sealed class ConsoleForm : Form
         if (settings.ConsoleWidth >= MinimumSize.Width && settings.ConsoleHeight >= MinimumSize.Height)
             Size = new Size(settings.ConsoleWidth, settings.ConsoleHeight);
         AppendLog("查詢、套用與手動 ISAPI 會呼叫已安裝的 hik-isapi。請先在專案目錄執行：");
-        AppendLog("py -3 -m pip install -e .");
+        AppendLog("python -m pip install -e .");
         AppendLog("即時影像每秒抓一張 JPEG。101 是可見光，201 是熱成像。");
         if (warning != null)
             AppendLog(warning);

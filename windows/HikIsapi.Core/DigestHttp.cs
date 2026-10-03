@@ -53,24 +53,58 @@ public static class DigestCalculator
         int nc)
     {
         var hash = ResponseHash(method, uri, username, password, challenge, cnonce, nc);
+        // 欄位順序跟 httpx DigestAuth 相同。這台相機接受那個客戶端，
+        // 內嵌解析器有時會在意 response 與 algorithm 的先後。
         var parts = new List<string>
         {
             $"username=\"{Escape(username)}\"",
             $"realm=\"{Escape(challenge.Realm)}\"",
             $"nonce=\"{Escape(challenge.Nonce)}\"",
             $"uri=\"{Escape(uri)}\"",
-            "algorithm=MD5",
             $"response=\"{hash}\"",
+            "algorithm=MD5",
         };
+        if (!string.IsNullOrEmpty(challenge.Opaque))
+            parts.Add($"opaque=\"{Escape(challenge.Opaque)}\"");
         if (!string.IsNullOrEmpty(challenge.Qop))
         {
             parts.Add("qop=auth");
             parts.Add($"nc={nc.ToString("x8", CultureInfo.InvariantCulture)}");
             parts.Add($"cnonce=\"{Escape(cnonce)}\"");
         }
-        if (!string.IsNullOrEmpty(challenge.Opaque))
-            parts.Add($"opaque=\"{Escape(challenge.Opaque)}\"");
         return "Digest " + string.Join(", ", parts);
+    }
+
+    internal static string? SelectDigestChallenge(IEnumerable<string>? values)
+    {
+        if (values == null)
+            return null;
+        var parts = values.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).ToList();
+        for (var index = 0; index < parts.Count; index++)
+        {
+            if (!parts[index].StartsWith("Digest", StringComparison.OrdinalIgnoreCase))
+                continue;
+            var builder = new StringBuilder(parts[index]);
+            for (var next = index + 1; next < parts.Count; next++)
+            {
+                if (IsAuthScheme(parts[next]))
+                    break;
+                builder.Append(", ").Append(parts[next]);
+            }
+            return builder.ToString();
+        }
+        return null;
+    }
+
+    private static bool IsAuthScheme(string value)
+    {
+        var space = value.IndexOf(' ');
+        var word = space < 0 ? value : value[..space];
+        return word.Equals("Basic", StringComparison.OrdinalIgnoreCase)
+            || word.Equals("Digest", StringComparison.OrdinalIgnoreCase)
+            || word.Equals("Bearer", StringComparison.OrdinalIgnoreCase)
+            || word.Equals("Negotiate", StringComparison.OrdinalIgnoreCase)
+            || word.Equals("NTLM", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool TryParseChallenge(string? header, out DigestChallenge? challenge)
@@ -182,6 +216,8 @@ public sealed class DigestHttp : IDisposable
         {
             Timeout = timeout ?? TimeSpan.FromSeconds(8),
         };
+        _client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "hik-isapi/0.1.0");
+        _client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/xml, application/json;q=0.9, */*;q=0.8");
     }
 
     public async Task<DigestResponse> GetAsync(Uri uri, string username, string password, CancellationToken cancellationToken)
@@ -254,15 +290,15 @@ public sealed class DigestHttp : IDisposable
     {
         if (response.StatusCode != HttpStatusCode.Unauthorized)
             return null;
-        foreach (var header in response.Headers.WwwAuthenticate)
+        // WwwAuthenticate 會把 Digest 參數的逗號當成下一組認證，nonce 因此消失，重試被當成 401。
+        if (response.Headers.NonValidated.TryGetValues("WWW-Authenticate", out var raw))
         {
-            if (!header.Scheme.Equals("Digest", StringComparison.OrdinalIgnoreCase))
-                continue;
-            return string.IsNullOrEmpty(header.Parameter) ? header.Scheme : header.Scheme + " " + header.Parameter;
+            var selected = DigestCalculator.SelectDigestChallenge(raw);
+            if (selected != null)
+                return selected;
         }
-        if (response.Headers.TryGetValues("WWW-Authenticate", out var values))
-            return values.FirstOrDefault();
-        return null;
+        return DigestCalculator.SelectDigestChallenge(response.Headers.WwwAuthenticate.Select(header =>
+            string.IsNullOrEmpty(header.Parameter) ? header.Scheme : header.Scheme + " " + header.Parameter));
     }
 
     public void Dispose() => _client.Dispose();

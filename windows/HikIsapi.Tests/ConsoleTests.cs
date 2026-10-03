@@ -203,6 +203,50 @@ public sealed class DigestTests
     }
 
     [Fact]
+    public void ParsesHikvisionChallengeWithNonceAfterQop()
+    {
+        Assert.True(DigestCalculator.TryParseChallenge(
+            "Digest qop=\"auth\", realm=\"IP Camera(C2872)\", nonce=\"abc\", stale=\"FALSE\"",
+            out var parsed));
+        Assert.Equal("IP Camera(C2872)", parsed!.Realm);
+        Assert.Equal("abc", parsed.Nonce);
+        Assert.Equal("auth", parsed.Qop);
+        Assert.Null(parsed.Opaque);
+    }
+
+    [Fact]
+    public void JoinsDigestParametersSplitOnCommas()
+    {
+        var selected = DigestCalculator.SelectDigestChallenge(new[]
+        {
+            "Basic realm=\"IP Camera\"",
+            "Digest realm=\"IP Camera(C2872)\"",
+            "nonce=\"abc\"",
+            "qop=\"auth\"",
+            "stale=\"FALSE\"",
+        });
+        Assert.True(DigestCalculator.TryParseChallenge(selected, out var parsed));
+        Assert.Equal("abc", parsed!.Nonce);
+        Assert.Equal("auth", parsed.Qop);
+    }
+
+    [Fact]
+    public void AuthorizationHeaderMatchesHttpxFieldOrder()
+    {
+        var header = DigestCalculator.AuthorizationHeader(
+            "GET",
+            "/ISAPI/Streaming/channels/101/picture",
+            "admin",
+            "secret",
+            new DigestChallenge { Realm = "IP Camera(C2872)", Nonce = "4e44493d", Qop = "auth" },
+            "3d990d12cad7554c",
+            1);
+        Assert.Equal(
+            "Digest username=\"admin\", realm=\"IP Camera(C2872)\", nonce=\"4e44493d\", uri=\"/ISAPI/Streaming/channels/101/picture\", response=\"2a429d16461c8474bb9bcf8cba2c6725\", algorithm=MD5, qop=auth, nc=00000001, cnonce=\"3d990d12cad7554c\"",
+            header);
+    }
+
+    [Fact]
     public async Task RetriesWithDigestAfterChallenge()
     {
         var handler = new ChallengeHandler();
@@ -214,9 +258,48 @@ public sealed class DigestTests
         Assert.Null(handler.Authorizations[0]);
         Assert.Contains("Digest ", handler.Authorizations[1]);
         Assert.Contains("username=\"admin\"", handler.Authorizations[1]);
+        var authorization = handler.Authorizations[1]!;
+        Assert.True(authorization.IndexOf("response=", StringComparison.Ordinal) < authorization.IndexOf("algorithm=MD5", StringComparison.Ordinal));
+        Assert.Equal("hik-isapi/0.1.0", handler.UserAgents[1]);
+    }
+
+    [Fact]
+    public async Task KeepsNonceFromRawWwwAuthenticate()
+    {
+        var handler = new RawChallengeHandler();
+        using var client = new DigestHttp(handler, disposeHandler: true, TimeSpan.FromSeconds(5));
+        var response = await client.GetAsync(new Uri("http://10.0.0.8/ISAPI/Streaming/channels/101/picture"), "admin", "pw", CancellationToken.None);
+        Assert.Equal(200, response.StatusCode);
+        Assert.Contains("nonce=\"abc\"", handler.Authorizations[1]);
+        Assert.Contains("realm=\"IP Camera(C2872)\"", handler.Authorizations[1]);
     }
 
     private sealed class ChallengeHandler : HttpMessageHandler
+    {
+        public List<string?> Authorizations { get; } = new();
+        public List<string?> UserAgents { get; } = new();
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Authorizations.Add(request.Headers.TryGetValues("Authorization", out var values) ? values.FirstOrDefault() : null);
+            UserAgents.Add(request.Headers.TryGetValues("User-Agent", out var agents) ? agents.FirstOrDefault() : null);
+            if (Authorizations.Count == 1)
+            {
+                var denied = new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized);
+                denied.Headers.WwwAuthenticate.Add(new System.Net.Http.Headers.AuthenticationHeaderValue(
+                    "Digest",
+                    "realm=\"IP Camera\", nonce=\"abc\", qop=\"auth\", algorithm=MD5"));
+                return Task.FromResult(denied);
+            }
+            var ok = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(new byte[] { 1, 2, 3 }),
+            };
+            return Task.FromResult(ok);
+        }
+    }
+
+    private sealed class RawChallengeHandler : HttpMessageHandler
     {
         public List<string?> Authorizations { get; } = new();
 
@@ -226,9 +309,9 @@ public sealed class DigestTests
             if (Authorizations.Count == 1)
             {
                 var denied = new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized);
-                denied.Headers.WwwAuthenticate.Add(new System.Net.Http.Headers.AuthenticationHeaderValue(
-                    "Digest",
-                    "realm=\"IP Camera\", nonce=\"abc\", qop=\"auth\", algorithm=MD5"));
+                denied.Headers.TryAddWithoutValidation(
+                    "WWW-Authenticate",
+                    "Digest qop=\"auth\", realm=\"IP Camera(C2872)\", nonce=\"abc\", stale=\"FALSE\"");
                 return Task.FromResult(denied);
             }
             var ok = new HttpResponseMessage(System.Net.HttpStatusCode.OK)

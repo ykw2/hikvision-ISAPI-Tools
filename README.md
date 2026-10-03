@@ -36,7 +36,7 @@ hik-isapi validate \
 需要：
 
 - Windows
-- Python 3.11 以上，並在專案目錄執行 `py -3 -m pip install -e .`
+- Python 3.11 以上，並在專案目錄執行 `python -m pip install -e .`
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)（只執行已發布的程式時，改裝 .NET 8 Desktop Runtime）
 
 ```powershell

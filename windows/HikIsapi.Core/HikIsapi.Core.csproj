@@ -4,4 +4,7 @@
     <RootNamespace>HikIsapi</RootNamespace>
     <AssemblyName>HikIsapi.Core</AssemblyName>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="HikIsapi.Tests" />
+  </ItemGroup>
 </Project>
