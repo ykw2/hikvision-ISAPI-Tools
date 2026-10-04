@@ -6,6 +6,9 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <RootNamespace>HikIsapi</RootNamespace>
     <AssemblyName>hik-isapi-win</AssemblyName>
+    <AssemblyTitle>蝕本成工具站</AssemblyTitle>
+    <Product>蝕本成工具站</Product>
+    <Description>蝕本成工具站</Description>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>

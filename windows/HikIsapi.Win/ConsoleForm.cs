@@ -53,7 +53,7 @@ public sealed class ConsoleForm : Form
     {
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = UiFont();
-        Text = "海康 ISAPI 操作台";
+        Text = "蝕本成工具站";
         Icon = AppIcon.Current;
         StartPosition = FormStartPosition.CenterScreen;
         BuildLayout();

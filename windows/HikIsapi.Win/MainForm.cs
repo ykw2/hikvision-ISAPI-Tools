@@ -36,7 +36,7 @@ public sealed class BatchForm : Form
 
     public BatchForm()
     {
-        Text = "海康 ISAPI 批次設定";
+        Text = "蝕本成工具站 — 批次設定";
         Icon = AppIcon.Current;
         Font = UiFont();
         AutoScaleMode = AutoScaleMode.Dpi;
