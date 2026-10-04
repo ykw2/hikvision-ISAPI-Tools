@@ -54,6 +54,7 @@ public sealed class ConsoleForm : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = UiFont();
         Text = "海康 ISAPI 操作台";
+        Icon = AppIcon.Current;
         StartPosition = FormStartPosition.CenterScreen;
         BuildLayout();
         _liveTimer.Tick += LiveTimer_Tick;
