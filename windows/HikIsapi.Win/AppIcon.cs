@@ -14,6 +14,6 @@ internal static class AppIcon
         var buffer = new MemoryStream();
         source.CopyTo(buffer);
         buffer.Position = 0;
-        return new Icon(buffer);
+        return new Icon(buffer, 32, 32);
     }
 }
