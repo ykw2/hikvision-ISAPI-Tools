@@ -1,0 +1,19 @@
+services:
+  webhook:
+    build: .
+    ports:
+      - "9000:9000"
+    environment:
+      DATA_DIR: /data
+      DATABASE_PATH: /data/events.db
+      HIK_BASIC_USER: ${HIK_BASIC_USER:-}
+      HIK_BASIC_PASSWORD: ${HIK_BASIC_PASSWORD:-}
+      CF_INGEST_URL: ${CF_INGEST_URL:-}
+      CF_INGEST_TOKEN: ${CF_INGEST_TOKEN:-}
+      MAX_IMAGE_BYTES: ${MAX_IMAGE_BYTES:-1048576}
+    volumes:
+      - webhook-data:/data
+    restart: unless-stopped
+
+volumes:
+  webhook-data:

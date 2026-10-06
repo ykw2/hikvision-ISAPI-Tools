@@ -212,6 +212,13 @@ print(report.success_count, report.failed_count)
 - 回應要求重新開機時，該支仍算成功，報告的 `reboot_required` 會是 true。
 - 連線逾時、HTTP 503 與 ISAPI 裝置忙碌會依 `retries` 重試。認證失敗與 XML 內容錯誤不會重試。
 
+## 接收上報
+
+攝影機的 HTTP 監聽可以送到本機的 9000 埠。服務先把事件存下來並回 200，再排隊轉去 Cloudflare。瀏覽器也用同一個埠看事件。啟動方式、海康要填的路徑，以及初始密碼在哪裡看，寫在 [deploy/webhook/README.md](deploy/webhook/README.md)。
+
+- 海康填 `http://<這台主機的區網 IP>:9000/hik/events`
+- 管理頁開 `http://<這台主機的區網 IP>:9000/`，帳號是 `admin`
+
 ## 測試
 
 ```bash

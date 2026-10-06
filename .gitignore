@@ -14,3 +14,4 @@ build/
 /inventory.csv
 /cameras.csv
 .env
+/deploy/webhook/data/
